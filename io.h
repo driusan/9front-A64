@@ -61,9 +61,14 @@
 
 #define	RTC			0x01F00000
 #define PRCM        0x01F01400
-#define PIO         0x01F02C00
-#define	R_RSB		0x01F03400
-
+#define PIO         0x01C20800
+#define R_PIO       0x01F02C00
+#define	R_RSB	    0x01F03400
+#define PWM         0x01C21400
+#define R_PWM	    0x01F03800
+#define DSI	    0x01CA0000
+#define DPHY        0x01CA1000
+#define DE	    0x01000000
 /* addresses for axp803 pmic */
 #define	PMICADDR	0x3a3
 #define	PMICRTA		0x2d

@@ -82,7 +82,7 @@ extern void meminit(void);
 
 extern void putasid(Proc*);
 extern void* ucalloc(usize);
-
+extern void* fbmemalloc(usize);
 
 /* clock */
 extern void clockinit(void);
@@ -168,6 +168,10 @@ extern u32int getcpuclk_p(void);
 extern int setcpuclk(uint);
 extern int setcpuclk_n(u32int);
 extern int openthegate(char*);
+extern ulong getclkrate(int clkid);
+extern void setclkrate(int clkid, ulong hz);
+extern void clkenable(int clkid);
+extern void clkdisable(int clkid);
 
 extern void turnonths(void);	//needs to go
 
@@ -194,4 +198,7 @@ extern int setpmicvolt(char*, int);
 
 /* archA64 */
 extern void arch_rsbsetup(void);
-
+extern void arch_displayconfig(void);
+/* display */
+extern void backlight(int pct);
+extern void deinit(void);

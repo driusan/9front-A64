@@ -42,6 +42,8 @@
 #define L1TABLES	((-KSEG0+PGLSZ(2)-1)/PGLSZ(2))
 #define L1TABLE(v, l)	(L1TABLES - ((PTLX(v, 2) % L1TABLES) >> (((l)-1)*PTSHIFT)) + (l)-1)
 #define L1TOPSIZE	(1ULL << (EVASHIFT - PTLEVELS*PTSHIFT))
+#define L1BOT		((L1-L1TOPSIZE)&-BY2PG)
+#define MPIDMASK	3ULL			/* MPIDR_EL1 affinity bits signifying the CPUID */
 
 #define	MAXMACH		4			/* max # cpus system can run */
 #define	MACHSIZE	(8*KiB)
@@ -61,7 +63,7 @@
 
 //#define	PHYSIO		0x0
 //#define	IOSIZE		0x10000000
-
+//				0x20000000
 #define	PHYSIO	0x01C00000
 #define	IOSIZE	0x303C00
 

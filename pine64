@@ -18,12 +18,14 @@ dev
 	ip	arp chandial ip ipv6 ipaux iproute netlog nullmedium pktmedium inferno
 	uart
 	rtc
+	sd
 
 link
 	ethermedium
 	loopbackmedium
 	netdevmedium
 #	ethersunxi	ethermii
+	sdhc
 
 ip
 	tcp
@@ -41,6 +43,8 @@ misc
 	thermal
 	rsb
 	axp803
+	sdmmc sdhc
+	display
 
 port
 	int cpuserver = 0;
