@@ -421,8 +421,10 @@ archinit(void)
 {
 	keyadcinit();
 	thermalinit();
+	iprint("rsbinit\n");
 	rsbinit();
-	
+	deinit();
+
 	addarchfile("keyadc", 0444, keyadcread, nil);
 	addarchfile("keyadc_event", 0444, keyadceventread, nil);
 	addarchfile("pllgates", 0444, pllgatesread, nil);

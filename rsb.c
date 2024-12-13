@@ -240,8 +240,8 @@ rsb_read(u8int rtaddr, u16int devaddr, u8int reg, uint bytes)
 	}
 
 	/* set rtaddr and devaddr for the device to talk to */
-//	rsbwr(RSB_DAR_REG, (rtaddr << 16) | devaddr);
-	rsbwr(RSB_DAR_REG, (rtaddr << 16));
+	rsbwr(RSB_DAR_REG, (rtaddr << 16) | devaddr);
+//	rsbwr(RSB_DAR_REG, (rtaddr << 16));
 	rsbwr(RSB_CMD_REG, RSB_CMD_IDX_SRTA);
 
 	/* set the register in the device to be read */
@@ -291,8 +291,8 @@ rsb_write(u8int rtaddr, u16int devaddr, u8int reg, u32int val, uint bytes)
 	}
 
 	/* set rtaddr and devaddr for the device to talk to */
-//	rsbwr(RSB_DAR_REG, (rtaddr << 16) | devaddr);
-	rsbwr(RSB_DAR_REG, (rtaddr << 16));
+	rsbwr(RSB_DAR_REG, (rtaddr << 16) | devaddr);
+//	rsbwr(RSB_DAR_REG, (rtaddr << 16));
 	rsbwr(RSB_CMD_REG, RSB_CMD_IDX_SRTA);
 
 	/* set the register in the device to be writen to */

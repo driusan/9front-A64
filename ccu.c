@@ -6,8 +6,14 @@
 #include "io.h"
 #include "ccu.h"
 
+#define CLK_ENABLED 1<<31
 
-
+/* XXX: These may also be shared with other non-SDMMC clocks */
+#define SDMMC_CLK_SRC_MASK	0x3
+#define	SDMMC_CLK_SRC_SHIFT 	24
+#define	SDMMC_CLK_N_MASK	0x3
+#define SDMMC_CLK_N_SHIFT	16
+#define SDMMC_CLK_M_MASK	0xf
 static u32int
 ccurd(int offset)
 {
@@ -56,7 +62,7 @@ listgates(int i)
 	Gate *g = gates;
 	u32int v;
 	char p[32];
-	int l, m;
+	int m;
 
 	g += i;
 
@@ -161,11 +167,11 @@ openthegate(char *name)
 void
 debuggates(void)
 {
-	print("%ulb\n", ccurd(BUS_CLK_GATING_REG0));
-	print("%ulb\n", ccurd(BUS_CLK_GATING_REG1));
-	print("%ulb\n", ccurd(BUS_CLK_GATING_REG2));
-	print("%ulb\n", ccurd(BUS_CLK_GATING_REG3));
-	print("%ulb\n", ccurd(BUS_CLK_GATING_REG4));
+	print("%ub\n", ccurd(BUS_CLK_GATING_REG0));
+	print("%ub\n", ccurd(BUS_CLK_GATING_REG1));
+	print("%ub\n", ccurd(BUS_CLK_GATING_REG2));
+	print("%ub\n", ccurd(BUS_CLK_GATING_REG3));
+	print("%ub\n", ccurd(BUS_CLK_GATING_REG4));
 }
 
 u32int
@@ -292,7 +298,7 @@ setcpuclk(uint setrate)
 void
 turnonths(void)
 {
-	u32int	buf;
+//	u32int	buf;
 
 	ccuwr(THS_CLK_REG, 0x80000000);
 
@@ -306,4 +312,117 @@ turnonths(void)
 
 	if(openthegate("THS") != 1)
 		iprint("THS open FAIL\n");
+}
+
+void
+clkenable(int clkid)
+{
+	u32int reg;
+	switch(clkid){
+	case SDMMC0_CLK_REG:
+	case SDMMC1_CLK_REG:
+	case SDMMC2_CLK_REG:
+		reg = ccurd(clkid);
+		reg |= CLK_ENABLED;	
+		ccuwr(clkid, reg);
+		return;
+	default:
+		panic("Unhandled clock");
+	}
+}
+
+void
+clkdisable(int clkid)
+{
+	u32int reg;
+	switch(clkid){
+	case SDMMC0_CLK_REG:
+	case SDMMC1_CLK_REG:
+	case SDMMC2_CLK_REG:
+		reg = ccurd(clkid);
+		reg &= ~(CLK_ENABLED);
+		ccuwr(clkid, reg);
+		return;	
+	default:
+		panic("Unhandled clock");
+	}
+}
+void
+setclkrate(int clkid, ulong hz)
+{
+	u32int	reg, n, m, refspeed;
+	switch(clkid){
+	case SDMMC0_CLK_REG:
+	case SDMMC1_CLK_REG:
+	case SDMMC2_CLK_REG:
+		if(hz <= SYSCLOCK){
+			refspeed = SYSCLOCK;
+
+		} else {
+			/* should be 1.2Ghz */
+			refspeed = getclkrate(PLL_PERIPH0_CTRL_REG)*2;
+		}
+
+		m = refspeed / hz;
+		n = 0;
+		while(m > 16){
+			n++;
+			// if(m & 1 != 0)
+			//	iprint("ccu: warning. losing precision.\n");
+			m >>= 1;
+		}
+		if (n > 3){
+			// panic?
+			iprint("ccu: n too high. Using max n and m.\n");
+			n = 3;
+			m = 16;
+		}
+		reg = ccurd(clkid);
+		reg &=  ~(
+			(SDMMC_CLK_N_MASK << SDMMC_CLK_N_SHIFT)
+			| SDMMC_CLK_M_MASK |
+			(SDMMC_CLK_SRC_MASK << SDMMC_CLK_SRC_SHIFT)
+		);
+		reg |= 
+			((refspeed == SYSCLOCK ? 0 : 1)<< SDMMC_CLK_SRC_SHIFT)
+			| (n << SDMMC_CLK_N_SHIFT)
+			| ((m-1) & SDMMC_CLK_M_MASK);
+		ccuwr(clkid, reg);
+		break;
+	default:
+		panic("Unhandled clock");
+	}
+}
+ulong
+getclkrate(int clkid)
+{
+	u32int	reg, n, k, ref, m;
+	reg = ccurd(clkid);
+	switch(clkid){
+	case PLL_PERIPH0_CTRL_REG:
+	case PLL_PERIPH1_CTRL_REG:
+		if (!(reg & CLK_ENABLED))
+			return 0;
+		n = ((reg & 0x1F00) >> 8)+1;
+		k = ((reg & 0x30) >> 4)+1;
+		return SYSCLOCK*n*k/2;
+	case SDMMC0_CLK_REG:
+	case SDMMC1_CLK_REG:
+	case SDMMC2_CLK_REG:
+		if (!(reg & CLK_ENABLED))
+			return 0;
+		ref = (reg >> 24) & 0x3;
+		if (ref == 0)
+			ref = SYSCLOCK;
+		else if (ref == 1)
+			ref = getclkrate(PLL_PERIPH0_CTRL_REG)*2;
+		else
+			ref = getclkrate(PLL_PERIPH1_CTRL_REG)*2;
+		n = (reg >> SDMMC_CLK_N_SHIFT) & 0x3;
+		n = 1<<n;
+		m = (reg & 0xf)+1;
+		return ref / n / m;
+	default:
+		panic("Unhandled clock");
+	}
 }
