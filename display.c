@@ -12,9 +12,15 @@
 #include "io.h"
 
 #define R_PWM_CTRL_REG 0x0
-#define	PWM_CH0_PERIOD 0x04
-#define	PIO_PH_DATA 0x10c
+#define	R_PWM_CH0_PERIOD 0x04
+
+#define PIO_CFG_MASK(n) ~(7<<n)
+
 #define PIO_PH_CFG01 0x100
+#define PIO_PD_CFG02 0x74
+#define	PIO_PH_DATA 0x10c
+#define PIO_PD_DATA 0x7c
+
 #define	RPIO_CFG10	0x04	/* Port L Configure Register 1 */
 #define PLL_VIDEO00_CTRL_REG 0x10
 #define TCON0_CLK_REG 0x118
@@ -149,6 +155,9 @@ dphywr(int offset, u32int val)
 	coherence();
 	*IO(u32int, (DPHY + offset)) = val;
 }
+
+
+
 /**
  * Configure the backlight pins for the Pinephone display
  */
@@ -156,16 +165,16 @@ void
 backlight(int pct)
 {
 	/* configure PL10 for PWM */
-	rpiowr(RPIO_CFG10, rpiord(RPIO_CFG10) & ~(7<<8) | (2<<8));
+	rpiowr(RPIO_CFG10, rpiord(RPIO_CFG10) & PIO_CFG_MASK(8) | (2<<8));
 	// disable r_pwm_ctrl_reg (pg 194)
 	rpwmwr(R_PWM_CTRL_REG, rpwmrd(R_PWM_CTRL_REG) & ~(1<<6));
 	
 	// configure r_pwm_ch0_period (pg 195)
-	pwmwr(PWM_CH0_PERIOD,  (0x4af << 16) | ((0x4af*pct/100)&0xffff));
+	rpwmwr(R_PWM_CH0_PERIOD,  (0x4af << 16) | ((0x4af*pct/100)&0xffff));
 	// enable r_pwm_ctrl_reg
 	rpwmwr(R_PWM_CTRL_REG, rpwmrd(R_PWM_CTRL_REG) | (1<<6) | (1<<4) | 0xf);
 	/* configure PH10 for PIO output */
-	piowr(PIO_PH_CFG01, piord(PIO_PH_CFG01) & ~(7<<8) | (1<<8));
+	piowr(PIO_PH_CFG01, piord(PIO_PH_CFG01) & PIO_CFG_MASK(8) | (1<<8));
 	// on
 	piowr(PIO_PH_DATA, piord(PIO_PH_DATA) | (1<<10));
 }
@@ -248,9 +257,11 @@ dsiinit(void)
 
 	// enable dsi block
 #define DSI_CTL_REG 0x00
-	dsiwr(DSI_CTL_REG, dsird(DSI_CTL_REG) | 1);
+	// dsiwr(DSI_CTL_REG, dsird(DSI_CTL_REG) | 1);
+	dsiwr(DSI_CTL_REG, 1);
 #define DSI_BASIC_CTL0_REG 0x10
 	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) | (1<<17)|(1<<16)); // crc + ecc
+	dsiwr(DSI_BASIC_CTL0_REG, (1<<17)|(1<<16)); // crc + ecc
 #define DSI_START_TRANS_REG 0x60
 	dsiwr(DSI_START_TRANS_REG, 10);
 #define DSI_TRANS_ZERO_REG 0x78
@@ -394,12 +405,10 @@ static void
 lcdreset(void)
 {
 	// configure PD23 for output
-#define PD23_SELECT 0x74
-	piowr(PD23_SELECT, piord(PD23_SELECT) & ~(7<<28) | (1<<28));
+	piowr(PIO_PD_CFG02, piord(PIO_PD_CFG02) & PIO_CFG_MASK(28) | (1<<28));
 
-#define PD_DATA_REG 0x7c
-	// set PD to high or low (which?)
-	piowr(PD_DATA_REG, piord(PD_DATA_REG) | (1<<23));
+	// set PD23 to high
+	piowr(PIO_PD_DATA, piord(PIO_PD_DATA) | (1<<23));
 	delay(15);
 }
 #define MIPI_DSI_DCS_SHORT_WRITE 0x05
@@ -922,34 +931,24 @@ lcdinit(void)
 	delay(120);
 	mipidcs(dispon, sizeof(dispon));	
 }
-#define DEBUG(x) { iprint("%s\n", x); delay(1000); }
 
 static void
 pmicsetup(void)
 {
-	// configure PD_CFG2_REG for output, set to low
-DEBUG("CONF");
-	piowr(PD23_SELECT, piord(PD23_SELECT) & ~(7<<28) | (1<<28));
-DEBUG("DATA");
-	piowr(PD_DATA_REG, piord(PD_DATA_REG) & ~(1<<23));
+	// configure PD23 for output, set to low. (Pin is active low)
+	piowr(PIO_PD_CFG02, piord(PIO_PD_CFG02) & PIO_CFG_MASK(28) | (1<<28));
+	piowr(PIO_PD_DATA, piord(PIO_PD_DATA) & ~(1<<23));
 	delay(15);
-DEBUG("DLDVOLT");
 	setpmicvolt("DLDO1", 3300); // camera / usb hsic / i2c sensors
-DEBUG("DLD01 enable");
 	setpmicstate("DLDO1", 1);
-	// XXX: GPIO0LDO for capacitive touch panel
-DEBUG("GPIO0LD0");
-	pwrwr(0x91, pwrrd(0x91) & ~(0x1f) | 26); // XXX: Move this to axp803.c. Enable GPIO0LDO for capacitive touch panel.
-
-DEBUG("LOW NOISE LDO");
-	pwrwr(0x90, pwrrd(0x90) & ~(0x7) | 3); // XXX: Low noise LDO on
-DEBUG("DLDO2 1800");
-
-	setpmicvolt("DLDO2", 1800); // MIPI DSI connector
-DEBUG("DLD02 ENABLE");
+	setpmicvolt("DLDO2", 1800);
 	setpmicstate("DLDO2", 1);
-	delay(15); // wait for power on
+	// XXX: GPIO0LDO for capacitive touch panel
+	pwrwr(0x91, pwrrd(0x91) & ~(0x1f) | 26); // XXX: Move this to axp803.c. Enable GPIO0LDO for capacitive touch panel.
+	pwrwr(0x90, pwrrd(0x90) & ~(0x7) | 3); // XXX: Low noise LDO on
+	pwrwr(0x90, 3); // XXX: Low noise LDO on
 
+	delay(15); // wait for power on
 }
 
 static void
@@ -972,10 +971,12 @@ mipihscinit(void)
 	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) | 1);
 	coherence();
 	/*
+	print("Waiting for init..");
 	while(dsird(DSI_BASIC_CTL0_REG) & 1){
 		delay(50);
-	}*/
-	delay(1);
+	}
+	*/
+	delay(10);
 }
 
 static void
@@ -996,24 +997,32 @@ dengineinit(void)
 	while((ccurd(PLL_DE_CTRL_REG) & (1<<28)) == 0){
 		delay(1);
 	}
+	iprint("Stable");
+	delay(1000);
 #define DE_CLK_REG 0x104
 	ccuwr(DE_CLK_REG, ccurd(DE_CLK_REG) & ~(1<<31 | 7<<24) | ((1<<31)|(1<<24)));
 	iprint("DE_CLK_REG: %ux\n", ccurd(DE_CLK_REG));
+	delay(1000);
 	ccuwr(BUS_SOFT_RST_REG1, ccurd(BUS_SOFT_RST_REG1) |(1<<12));
+	delay(1000);
 	ccuwr(BUS_CLK_GATING_REG1, ccurd(BUS_CLK_GATING_REG1) |(1<<12));
 	delay(100);
 #define SCLK_GATE 0x0
+	delay(1000);
 	iprint("sclk\n");
 	coherence();
 	dewr(SCLK_GATE, derd(SCLK_GATE) | 1);
 #define AHB_RESET 0x8
+	delay(1000);
 	iprint("ahbreset\n");
 	dewr(AHB_RESET, derd(AHB_RESET) | 1);
 #define HCLK_GATE 0x4
+	delay(1000);
 	iprint("hclk_gate\n");
 	dewr(HCLK_GATE, derd(HCLK_GATE) | 1);
 
 #define DE2TCON_MUX 0x10
+	delay(1000);
 	iprint("detcon\n");
 	dewr(DE2TCON_MUX, derd(DE2TCON_MUX) & ~(1));
 
@@ -1025,11 +1034,13 @@ dengineinit(void)
 #define VIDEO_SCALER_CH0(n) (MIXER0 + 0x20000 + n)
 #define UI_SCALER_CH0(n) (MIXER0 + 0x40000 + n)
 #define UI_SCALER_CH1(n) (MIXER0 + 0x50000 + n)
+	delay(1000);
 	iprint("video scaler\n");
-	// dewr(VIDEO_SCALER_CH0(0), derd(VIDEO_SCALER_CH0(0)) & ~1);
+	dewr(VIDEO_SCALER_CH0(0), derd(VIDEO_SCALER_CH0(0)) & ~1);
 dewr(VIDEO_SCALER_CH0(0), 0);
+	delay(1000);
 	iprint("ui scaler\n");
-	//dewr(UI_SCALER_CH0(0), derd(UI_SCALER_CH0(0)) & ~1);
+	dewr(UI_SCALER_CH0(0), derd(UI_SCALER_CH0(0)) & ~1);
 dewr(UI_SCALER_CH0(0),0);
 	iprint("ui scaler1\n");
 	dewr(UI_SCALER_CH1(0), derd(UI_SCALER_CH1(0)) & ~1);
@@ -1043,22 +1054,28 @@ dewr(MIXER0 + 0xa2000, 0);
 	iprint("a4000\n");
 //	dewr(MIXER0 + 0xa4000, derd(MIXER0 + 0xa4000) & ~1);
 dewr(MIXER0 + 0xa4000, 0);
+	delay(1000);
 	iprint("a6000\n");
 // 	dewr(MIXER0 + 0xa6000, derd(MIXER0 + 0xa6000) & ~1);
 dewr(MIXER0 + 0xa6000, 0);
+	delay(1000);
 	iprint("a8000\n");
 //	dewr(MIXER0 + 0xa8000, derd(MIXER0 + 0xa8000) & ~1);
 dewr(MIXER0 + 0xa8000, 0);
+	delay(1000);
 	iprint("aa000\n");
 //	dewr(MIXER0 + 0xaa000, derd(MIXER0 + 0xaa000) & ~1);
 dewr(MIXER0 + 0xaa000, 0);
 #define DRCBASE 0x11b0000
+	delay(1000);
 	iprint("DRC\n");
-	coherence();
 	u32int* drcbase = vmap(DRCBASE, 1024);
+	coherence();
 //	*(drcbase + 0) = *(drcbase + 0) & ~1;
 *(drcbase + 0) = 0;
 	// ENABLE MIXER0!!!
+	iprint("going to enable mixer 0\n");
+	delay(5000);
 	iprint("enable mixer0\n");
 	dewr(MIXER0, derd(MIXER0) | 1);
 }
@@ -1070,12 +1087,12 @@ displaysomething(void) {
 	fb = malloc(720*1440*4);
 	iprint("Alloced\n");
 	for(int i = 0;i < 720*1440; i++) {
-		fb[i] = 0x80808080;
+		fb[i] = 0xffff00ff | ((i%255)<<8);
 	}
 #define BLD(x) (0x1000 + x)
 	//BLK_BK_COLOR
 	iprint("blk_bk_color\n");
-	dewr(BLD(0x88), 0xff0000f0);
+	dewr(BLD(0x88), 0xff000000);
 	// BLD_PREMUL_CTL
 	iprint("blk_premul_ctl\n");
 	dewr(BLD(0x84), 0);
@@ -1098,6 +1115,7 @@ displaysomething(void) {
 #define OVL_UI_TOP_LADD 0x10
 	iprint("set top\n");
 	dewr(OVL_UI(i, OVL_UI_TOP_LADD), PADDR(fb));
+	// dewr(OVL_UI(i, OVL_UI_TOP_LADD), (uintptr )fb);
 #define OVL_UI_PITCH 0xc
 iprint("set pitch\n");
 	dewr(OVL_UI(i, OVL_UI_PITCH), 720*4);
@@ -1118,13 +1136,13 @@ iprint("blender\n");
 iprint("2\n");
 	dewr(MIXER0 + 0xc, (1440-1) << 16 | (720-1));
 iprint("3\n");
-		dewr(BLD(0x8 + i*0x10), (1440-1) << 16 | (720-1));
+	dewr(BLD(0x8 + i*0x10), (1440-1) << 16 | (720-1));
 iprint("4\n");
-		dewr(BLD(0x4 + i*0x10), 0xffff0000); // fill color, black
+	dewr(BLD(0x4 + i*0x10), 0xffff0000); // fill color, black
 iprint("5\n");
-		dewr(BLD(0xc + i*0x10), 0); // offset, none
+	dewr(BLD(0xc + i*0x10), 0); // offset, none
 iprint("6\n");
-		dewr(BLD(0x90 + i*0x4), 0x3010301); // XXX: what is this?
+	dewr(BLD(0x90 + i*0x4), 0x3010301); // XXX: what is this?
 
 	// disable scaler (already done) by init
 	
@@ -1139,30 +1157,29 @@ iprint("dbuffering!!\n");
 	coherence();
 	dewr(MIXER0 + 0x8, 1); // enable double buffering
 	iprint("Can you see anything?\n");
-	delay(10000);
 }
+
 void
 deinit(void)
 {
 	iprint("Backlight");
 	backlight(90);
+	// DE is below PHYSIO, so we need to map it in for dewr and derd.
+	// 
+	// We should probably just fix this in io.h
 	demmio = vmap(DE, 1024);
 	for(int i = 0; i < 4*1024; i++){
 		vmap(DE+(i*1024), 1024);
 	}
 	coherence();
 	iprint("deinit\n");
-	delay(1000);
+
 	iprint("tcon0 init\n");
 	tcon0init();
-	delay(1000);
 	iprint("pmic setup\n");
 	pmicsetup(); // pmic was already initialized for rsb, just need to configure.
-	delay(1000);
-
 	iprint("dsi block\n");
 	dsiinit();	// enable mipi dsi block
-	delay(1000);
 	iprint("dphyinit\n");
 	dphyinit(); // enable mipi physical layer
 	iprint("lcd reset\n");
@@ -1176,7 +1193,4 @@ deinit(void)
 	delay(160); // wait 160ms
 	iprint("rendering\n");
 	displaysomething();
-	// render graphics 
-	backlight(90);
-	
 }
