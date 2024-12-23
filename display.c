@@ -997,36 +997,28 @@ dengineinit(void)
 	while((ccurd(PLL_DE_CTRL_REG) & (1<<28)) == 0){
 		delay(1);
 	}
-	iprint("Stable");
-	delay(1000);
 #define DE_CLK_REG 0x104
 	ccuwr(DE_CLK_REG, ccurd(DE_CLK_REG) & ~(1<<31 | 7<<24) | ((1<<31)|(1<<24)));
 	iprint("DE_CLK_REG: %ux\n", ccurd(DE_CLK_REG));
-	delay(1000);
 	ccuwr(BUS_SOFT_RST_REG1, ccurd(BUS_SOFT_RST_REG1) |(1<<12));
-	delay(1000);
 	ccuwr(BUS_CLK_GATING_REG1, ccurd(BUS_CLK_GATING_REG1) |(1<<12));
 	delay(100);
 #define SCLK_GATE 0x0
-	delay(1000);
 	iprint("sclk\n");
 	coherence();
 	dewr(SCLK_GATE, derd(SCLK_GATE) | 1);
 #define AHB_RESET 0x8
-	delay(1000);
 	iprint("ahbreset\n");
 	dewr(AHB_RESET, derd(AHB_RESET) | 1);
 #define HCLK_GATE 0x4
-	delay(1000);
 	iprint("hclk_gate\n");
 	dewr(HCLK_GATE, derd(HCLK_GATE) | 1);
 
 #define DE2TCON_MUX 0x10
-	delay(1000);
-	iprint("detcon\n");
+	iprint("de2tcon\n");
 	dewr(DE2TCON_MUX, derd(DE2TCON_MUX) & ~(1));
 
-#define MIXER0 (DE+0x10000)
+#define MIXER0 (DE+0x100000)
 	iprint("mixer0 to 0x5fff\n");
 	for(int i = 0; i < 0x6000; i+= 4){
 		dewr(MIXER0 + i, 0);
@@ -1034,48 +1026,36 @@ dengineinit(void)
 #define VIDEO_SCALER_CH0(n) (MIXER0 + 0x20000 + n)
 #define UI_SCALER_CH0(n) (MIXER0 + 0x40000 + n)
 #define UI_SCALER_CH1(n) (MIXER0 + 0x50000 + n)
-	delay(1000);
 	iprint("video scaler\n");
 	dewr(VIDEO_SCALER_CH0(0), derd(VIDEO_SCALER_CH0(0)) & ~1);
 dewr(VIDEO_SCALER_CH0(0), 0);
-	delay(1000);
 	iprint("ui scaler\n");
 	dewr(UI_SCALER_CH0(0), derd(UI_SCALER_CH0(0)) & ~1);
 dewr(UI_SCALER_CH0(0),0);
 	iprint("ui scaler1\n");
 	dewr(UI_SCALER_CH1(0), derd(UI_SCALER_CH1(0)) & ~1);
 dewr(UI_SCALER_CH1(0), 0);
-	iprint("a0000\n");
-	//dewr(MIXER0 + 0xa0000, derd(MIXER0 + 0xa0000) & ~1);
-dewr(MIXER0 + 0xa0000, 0);
-	iprint("a2000\n");
-	//dewr(MIXER0 + 0xa2000, derd(MIXER0 + 0xa2000) & ~1);
+	iprint("fce 0xa0000\n");
+	dewr(MIXER0 + 0xa0000, derd(MIXER0 + 0xa0000) & ~1);
+	iprint("bws a2000\n");
 dewr(MIXER0 + 0xa2000, 0);
-	iprint("a4000\n");
-//	dewr(MIXER0 + 0xa4000, derd(MIXER0 + 0xa4000) & ~1);
-dewr(MIXER0 + 0xa4000, 0);
-	delay(1000);
-	iprint("a6000\n");
-// 	dewr(MIXER0 + 0xa6000, derd(MIXER0 + 0xa6000) & ~1);
-dewr(MIXER0 + 0xa6000, 0);
-	delay(1000);
-	iprint("a8000\n");
-//	dewr(MIXER0 + 0xa8000, derd(MIXER0 + 0xa8000) & ~1);
-dewr(MIXER0 + 0xa8000, 0);
-	delay(1000);
-	iprint("aa000\n");
-//	dewr(MIXER0 + 0xaa000, derd(MIXER0 + 0xaa000) & ~1);
-dewr(MIXER0 + 0xaa000, 0);
+	iprint("lti a4000\n");
+	dewr(MIXER0 + 0xa4000, 0);
+
+	iprint("peaking a6000\n");
+	dewr(MIXER0 + 0xa6000, 0);
+	iprint("ase a8000\n");
+	dewr(MIXER0 + 0xa8000, 0);
+	iprint("fcc aa000\n");
+	dewr(MIXER0 + 0xaa000, 0);
 #define DRCBASE 0x11b0000
-	delay(1000);
 	iprint("DRC\n");
-	u32int* drcbase = vmap(DRCBASE, 1024);
+//	u32int* drcbase = vmap(DRCBASE, 1024);
 	coherence();
 //	*(drcbase + 0) = *(drcbase + 0) & ~1;
-*(drcbase + 0) = 0;
-	// ENABLE MIXER0!!!
-	iprint("going to enable mixer 0\n");
-	delay(5000);
+//*(drcbase + 0) = 0;
+	dewr(MIXER0 + 0xb0000, 0);
+	delay(1000);
 	iprint("enable mixer0\n");
 	dewr(MIXER0, derd(MIXER0) | 1);
 }
@@ -1087,12 +1067,13 @@ displaysomething(void) {
 	fb = malloc(720*1440*4);
 	iprint("Alloced\n");
 	for(int i = 0;i < 720*1440; i++) {
+		// random pattern
 		fb[i] = 0xffff00ff | ((i%255)<<8);
 	}
-#define BLD(x) (0x1000 + x)
+#define BLD(x) (MIXER0 + 0x1000 + x)
 	//BLK_BK_COLOR
 	iprint("blk_bk_color\n");
-	dewr(BLD(0x88), 0xff000000);
+	dewr(BLD(0x88), 0xff00ff00); // red bg
 	// BLD_PREMUL_CTL
 	iprint("blk_premul_ctl\n");
 	dewr(BLD(0x84), 0);
@@ -1115,39 +1096,39 @@ displaysomething(void) {
 #define OVL_UI_TOP_LADD 0x10
 	iprint("set top\n");
 	dewr(OVL_UI(i, OVL_UI_TOP_LADD), PADDR(fb));
-	// dewr(OVL_UI(i, OVL_UI_TOP_LADD), (uintptr )fb);
 #define OVL_UI_PITCH 0xc
 iprint("set pitch\n");
 	dewr(OVL_UI(i, OVL_UI_PITCH), 720*4);
 #define OVL_UI_MBSIZE 0x4
 iprint("set mbsize\n");
-	dewr(OVL_UI(i, OVL_UI_MBSIZE), (1440-1) << 16 | (720-1));
+	dewr(OVL_UI(i, OVL_UI_MBSIZE), ((1440-1) << 16) + (720-1));
 #define OVL_UI_SIZE 0x88
 iprint("set uisize\n");
-	dewr(OVL_UI(i, OVL_UI_SIZE), (1440-1) << 16 | (720-1));
+	dewr(OVL_UI(i, OVL_UI_SIZE), ((1440-1) << 16) + (720-1));
 
 #define OVL_UI_COORD 0x8
 iprint("setcoord\n");
 	dewr(OVL_UI(i, OVL_UI_COORD), 0);
 	
 	// set blender output
-iprint("blender\n");
-	dewr(BLD(0x8c), (1440-1) << 16 | (720-1));
-iprint("2\n");
-	dewr(MIXER0 + 0xc, (1440-1) << 16 | (720-1));
-iprint("3\n");
-	dewr(BLD(0x8 + i*0x10), (1440-1) << 16 | (720-1));
-iprint("4\n");
-	dewr(BLD(0x4 + i*0x10), 0xffff0000); // fill color, black
-iprint("5\n");
+iprint("BLD_SIZE\n");
+	dewr(BLD(0x8c), ((1440-1) << 16) + (720-1));
+iprint("GLB_SIZE\n");
+	dewr(MIXER0 + 0xc, ((1440-1) << 16) + (720-1));
+
+	// set blender input
+iprint("BLD_CH_ISIZE\n");
+	dewr(BLD(0x8 + i*0x10), ((1440-1) << 16) + (720-1));
+iprint("bld pipe fcolor\n");
+	dewr(BLD(0x4 + i*0x10), 0xffff0000); // fill color, red
+iprint("bld offset\n");
 	dewr(BLD(0xc + i*0x10), 0); // offset, none
-iprint("6\n");
-	dewr(BLD(0x90 + i*0x4), 0x3010301); // XXX: what is this?
+iprint("bld pipe mode\n");
+	dewr(BLD(0x90 + i*0x4), 0x03010301); // use coefficient of 1 for the blender source and dst
 
 	// disable scaler (already done) by init
-	
-	// set blender routes
-iprint("7\n");
+	dewr(MIXER0 + 0x40000, 0);
+
 	coherence();
 	dewr(BLD(0x80), 1);
 iprint("8\n");
