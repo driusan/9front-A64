@@ -6,11 +6,11 @@
  */
 #include "u.h"
 #include "../port/lib.h"
+
 #include "mem.h"
 #include "dat.h"
 #include "fns.h"
 #include "io.h"
-
 #define R_PWM_CTRL_REG 0x0
 #define	R_PWM_CH0_PERIOD 0x04
 
@@ -158,11 +158,17 @@ dphywr(int offset, u32int val)
 
 
 
+int brightness = 100;
+
+void backlight(int pct){
+	rpwmwr(R_PWM_CH0_PERIOD,  (0x4af << 16) | ((0x4af*pct/100)&0xffff));
+	brightness = pct;
+}
 /**
  * Configure the backlight pins for the Pinephone display
  */
-void
-backlight(int pct)
+static void
+backlightinit(void)
 {
 	/* configure PL10 for PWM */
 	rpiowr(RPIO_CFG10, rpiord(RPIO_CFG10) & PIO_CFG_MASK(8) | (2<<8));
@@ -170,7 +176,7 @@ backlight(int pct)
 	rpwmwr(R_PWM_CTRL_REG, rpwmrd(R_PWM_CTRL_REG) & ~(1<<6));
 	
 	// configure r_pwm_ch0_period (pg 195)
-	rpwmwr(R_PWM_CH0_PERIOD,  (0x4af << 16) | ((0x4af*pct/100)&0xffff));
+	rpwmwr(R_PWM_CH0_PERIOD,  (0x4af << 16) | ((0x4af*brightness/100)&0xffff));
 	// enable r_pwm_ctrl_reg
 	rpwmwr(R_PWM_CTRL_REG, rpwmrd(R_PWM_CTRL_REG) | (1<<6) | (1<<4) | 0xf);
 	/* configure PH10 for PIO output */
@@ -1078,9 +1084,9 @@ displaysomething(void) {
 	iprint("blk_premul_ctl\n");
 	dewr(BLD(0x84), 0);
 	// disable ui overlay, channel 1-3
-#define OVL_UI(i, reg) (MIXER0 + (0x3000 + 0x1000*i) + reg)
+#define OVL_UI(i, reg) (MIXER0 + (0x2000 + 0x1000*i) + reg)
 #define OVL_UI_ATTR_CTRL 0x00
-	for(int i = 0; i < 3; i++){
+	for(int i = 0; i < 4; i++){
 		// disable ui overlay, channel 1-3
 		iprint("disable ch%d overlay\n", i);
 		dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), 0);
@@ -1091,7 +1097,7 @@ displaysomething(void) {
 
 	iprint("set overlay\n");
 	// set overlay for channel 0. opaque, xrgb, alphamode 2, enable
-	int i = 0;
+	int i = 1;
 	dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), 0xff000405 | (1<<15));
 #define OVL_UI_TOP_LADD 0x10
 	iprint("set top\n");
@@ -1144,7 +1150,9 @@ void
 deinit(void)
 {
 	iprint("Backlight");
+	backlightinit();
 	backlight(90);
+
 	// DE is below PHYSIO, so we need to map it in for dewr and derd.
 	// 
 	// We should probably just fix this in io.h

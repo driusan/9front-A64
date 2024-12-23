@@ -415,6 +415,85 @@ pmicwrite(Chan*, void *a, long z, vlong offset)
 	return z;
 }
 
+/* blue = PD20, green = PD18, red = PD 19 */
+/*
+static long
+ledread(Chan*, void *a, long n, vlong offset)
+{
+	char *p, *name;
+	int i, l, s;
+
+	p = smalloc(READSTR);
+
+	l = 0;
+	qlock(&plock);
+
+	l += snprint(p+l, READSTR-l, "red = ?\n");
+	l += snprint(p+l, READSTR-l, "green = ?\n");
+	l += snprint(p+l, READSTR-l, "blue = ?\n");
+
+	i = 0;
+	while((name = getpmicname(i)) != nil){
+		l += snprint(p+l, READSTR-l, "%s\t%s\t%dmV\n", name, getpmicstate(i) ? "on" : "off", getpmicvolt(i));
+		i++;
+	}
+
+	n = readstr(offset, a, n, p);
+	free(p);
+	qunlock(&plock);
+	return n;
+}
+
+
+static long
+ledwrite(Chan*, void *a, long z, vlong offset)
+{
+	Cmdbuf *cb;
+	char *name, *cmd;
+	int state = -1;
+	int	volt;
+
+	cb = parsecmd(a, z);
+	if(waserror()){
+		free(cb);
+		nexterror();
+	}
+
+	ledset(cb->f[0], cb->f[1]);
+	free(cb);
+	USED(offset);
+	poperror();
+	return z;
+}
+*/
+extern int brightness;
+static long
+brightnessread(Chan*, void *a, long n, vlong offset)
+{
+	char *p, *name;
+	int i, l, s;
+
+	p = smalloc(READSTR);
+
+	l = 0;
+	qlock(&plock);
+
+	l += snprint(p+l, READSTR-l, "%d\n", brightness);
+	n = readstr(offset, a, n, p);
+	free(p);
+	qunlock(&plock);
+	return n;
+}
+static long
+brightnesswrite(Chan*, void *a, long z, vlong offset)
+{
+	int brt = atoi(a);
+	if (brt < 0 || brt > 100){
+		error("bad brightness");
+	}
+	backlight(brt);
+	return z;
+}
 
 void
 archinit(void)
@@ -435,5 +514,7 @@ archinit(void)
 	addarchfile("irqpend", 0444, irqpendread, nil);
 	addarchfile("irqact", 0444, irqactread, nil);
 	addarchfile("pmic", 0664, pmicread, pmicwrite);
+	// addarchfile("led", 0664, ledread, ledwrite);
+	addarchfile("brightness", 0644, brightnessread, brightnesswrite);
 }
 
