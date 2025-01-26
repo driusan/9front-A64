@@ -49,6 +49,7 @@ OBJ=\
 	gic.$O\
 	main.$O\
 	mmu.$O\
+	mem.$O\
 	keyadc.$O\
 	sysreg.$O\
 	random.$O\
@@ -83,11 +84,23 @@ install:V: /$objtype/$p$CONF
 /$objtype/$p$CONF:D: $p$CONF
 	cp -x $p$CONF /$objtype/
 
+ARM64FILES=`{../port/mkfilelist ../arm64}
+^($ARM64FILES)\.$O:R:	'../arm64/\1.c'
+	$CC $CFLAGS -I. -. ../arm64/$stem1.c
+
+cache.v8.$O:	../arm64/cache.v8.s
+	$AS $AFLAGS -I. -. ../arm64/cache.v8.s
+init9.$O:	../arm64/init9.s
+	$AS $AFLAGS -I. -. ../arm64/init9.s
+rebootcode.$O:	../arm64/rebootcode.s
+	$AS $AFLAGS -I. -. ../arm64/rebootcode.s
+
 <../boot/bootmkfile
 <../port/portmkfile
 <|../port/mkbootrules $CONF
 
 main.$O: rebootcode.i
+cache.v8.$O: ../arm64/sysreg.h
 
 #mmu.$O: /$objtype/include/ureg.h
 #l.$O mmu.$O: mem.h

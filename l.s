@@ -1,5 +1,5 @@
 #include "mem.h"
-#include "sysreg.h"
+#include "../arm64/sysreg.h"
 
 #undef	SYSREG
 #define	SYSREG(op0,op1,Cn,Cm,op2)	SPR(((op0)<<19|(op1)<<16|(Cn)<<12|(Cm)<<8|(op2)<<5))
@@ -18,12 +18,12 @@
 TEXT _start(SB), 1, $-4
 	MOV	R0, R26		/* save */
 
-//WAVE('1')
+WAVE('1')
 
 	MOV	$setSB-KZERO(SB), R28
 	BL	svcmode<>(SB)
 
-//WAVE('2')
+WAVE('2')
 
 	/* use dedicated stack pointer per exception level */
 	MOVWU	$1, R1
@@ -31,7 +31,7 @@ TEXT _start(SB), 1, $-4
 
 	BL	mmudisable<>(SB)
 
-//WAVE('3')
+WAVE('3')
 
 	/* invalidate local caches */
 	BL	cachedinv(SB)
@@ -51,17 +51,17 @@ TEXT _start(SB), 1, $-4
 
 	CBNZ	R1, _startup
 
-//WAVE('4')
+WAVE('4')
 
 	/* clear page table and machs */
-	MOV	$(L1-KZERO), R1
+	MOV	$(L1BOT-KZERO), R1
 	MOV	$(MACHADDR(-1)-KZERO), R2
 _zerol1:
 	MOV	ZR, (R1)8!
 	CMP	R1, R2
 	BNE	_zerol1
 
-//WAVE('5')
+WAVE('5')
 
 	/* clear BSS */
 	MOV	$edata-KZERO(SB), R1
@@ -71,23 +71,21 @@ _zerobss:
 	CMP	R1, R2
 	BNE	_zerobss
 
-//WAVE('6')
+WAVE('6')
 
 	/* setup page tables */
+	MOV	$(L1BOT-KZERO), R0
+	BL	mmuidmap(SB)
 	MOV	$(L1-KZERO), R0
 	BL	mmu0init(SB)
-
-
-
 	SEVL
 _startup:
 	WFE
 
-//WAVE('7')
-
+WAVE('7')
 	BL	mmuenable<>(SB)
-
-//VWAVE('8')
+WAVE('7')
+VWAVE('8')
 
 
 	MOV	R26, R0
@@ -96,7 +94,7 @@ _startup:
 	MSR	R27, TPIDR_EL1
 	MOV	$setSB(SB), R28
 
-//VWAVE('Z')
+VWAVE('Z')
 
 	BL	main(SB)
 
@@ -235,10 +233,11 @@ TEXT mmuenable<>(SB), 1, $-4
 	ISB	$SY
 
 	/* load the page tables */
-	MOV	$(L1TOP-KZERO), R0
+	MOV	$(L1BOT-KZERO), R0
+	MOV	$(L1TOP-KZERO), R1
 	ISB	$SY
 	MSR	R0, TTBR0_EL1
-	MSR	R0, TTBR1_EL1
+	MSR	R1, TTBR1_EL1
 	ISB	$SY
 
 	/* enable MMU and caches */
@@ -255,7 +254,6 @@ TEXT mmuenable<>(SB), 1, $-4
 	B	cacheiinv(SB)
 
 TEXT touser(SB), 1, $-4
-	MSR	$0x3, DAIFSet	// interrupts off
 	MOVWU	$0x10028, R1	// entry
 	MOVWU	$0, R2		// psr
 	MSR	R0, SP_EL0	// sp
@@ -745,4 +743,19 @@ TEXT zoot(SB), 1, $-4
 /* for debug waves */
 TEXT voot(SB), 1, $-4
 	VWAVE('W')
+	RETURN
+
+/*
+ * floating-point support.
+ */
+TEXT fpon(SB), 1, $-4
+	MOVW $(3<<20), R0
+	MSR R0, CPACR_EL1
+	ISB $SY
+	RETURN
+
+TEXT fpoff(SB), 1, $-4
+	MOVW $(0<<20), R0
+	MSR R0, CPACR_EL1
+	ISB $SY
 	RETURN

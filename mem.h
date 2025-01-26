@@ -5,16 +5,6 @@
 #define MiB		1048576u		/* Mebi 0x0000000000100000 */
 #define GiB		1073741824u		/* Gibi 000000000040000000 */
 
-#define MIN(a, b)	((a) < (b)? (a): (b))
-#define MAX(a, b)	((a) > (b)? (a): (b))
-
-//#define FMASK(o, w)	(((1<<(w))-1)<<(o))
-
-#define	UARTOUT		0x01C28000
-#define	VUARTOUT	(0xFFFFFF0001C28000ULL) 
-//#define	VUARTOUT	0x81C28000
-#define	PHYSCONS	(VIRTIO + UART0)
-
 /*
  * Sizes:
  * 	L0	L1	L2	L3
@@ -22,14 +12,13 @@
  *	16K	32M	64G	128T
  *	64K	512M	4T	-
  */
-
 #define	PGSHIFT		16		/* log(BY2PG) */
 #define	BY2PG		(1ULL<<PGSHIFT)	/* bytes per page */
 #define	ROUND(s, sz)	(((s)+(sz-1))&~(sz-1))
 #define	PGROUND(s)	ROUND(s, BY2PG)
 
 /* effective virtual address space */
-#define EVASHIFT	42
+#define EVASHIFT	34
 #define EVAMASK		((1ULL<<EVASHIFT)-1)
 
 #define PTSHIFT		(PGSHIFT-3)
@@ -43,6 +32,7 @@
 #define L1TABLE(v, l)	(L1TABLES - ((PTLX(v, 2) % L1TABLES) >> (((l)-1)*PTSHIFT)) + (l)-1)
 #define L1TOPSIZE	(1ULL << (EVASHIFT - PTLEVELS*PTSHIFT))
 
+#define MPIDMASK	3ULL			/* MPIDR_EL1 affinity bits signifying the CPUID */
 #define	MAXMACH		4			/* max # cpus system can run */
 #define	MACHSIZE	(8*KiB)
 
@@ -55,18 +45,9 @@
 #define	UCRAMSIZE	(8*MiB)
 
 #define VDRAM		(0xFFFFFFFFC0000000ULL)	/* 0x40000000 - 0x80000000 */
-#define	KTZERO		(VDRAM + 0x80000)	/* 0x40100000 - kernel text start */
+#define	KTZERO		(VDRAM + 0x100000)	/* 0x40100000 - kernel text start */
 
-#define	VIRTIO		(0xFFFFFF0000000000ULL)	/* 0x30000000 */
-
-//#define	PHYSIO		0x0
-//#define	IOSIZE		0x10000000
-
-#define	PHYSIO	0x01C00000
-#define	IOSIZE	0x303C00
-
-#define	PHYSDRAM	0x40000000
-#define	DRAMSIZE	0x80000000
+#define	VIRTIO		(0xFFFFFFFFB0000000ULL)	/* 0x30000000 */
 
 #define	KZERO		(0xFFFFFFFF80000000ULL)	/* 0x00000000 - kernel address space */
 
@@ -77,6 +58,10 @@
 
 #define KSEG0		(0xFFFFFFFE00000000ULL)
 
+/* temporary identity map for TTBR0 (using only top-level) */
+#define L1BOT		((L1-L1TOPSIZE)&-BY2PG)
+
+/* shared kernel page table for TTBR1 */
 #define L1		(L1TOP-L1SIZE)
 #define L1SIZE		((L1TABLES+PTLEVELS-2)*BY2PG)
 #define L1TOP		((MACHADDR(MAXMACH-1)-L1TOPSIZE)&-BY2PG)
@@ -158,5 +143,11 @@
  *	PHYS addresses as seen from the arm cpu.
  *	BUS  addresses as seen from peripherals
  */
+#define	PHYSDRAM	0
 
-
+#define MIN(a, b)	((a) < (b)? (a): (b))
+#define MAX(a, b)	((a) > (b)? (a): (b))
+#define	UARTOUT		0x01C28000
+//#define	VUARTOUT	(0xFFFFFFFFB1C28000ULL) 
+#define	VUARTOUT	0x81C28000
+#define	PHYSCONS	(VIRTIO + UART0)

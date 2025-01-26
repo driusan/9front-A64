@@ -69,13 +69,14 @@ extern void* kaddr(uintptr);
 extern void kmapinval(void);
 #define	VA(k)	((uintptr)(k))
 extern KMap *kmap(Page*);
+extern void kmapram(uintptr, uintptr);
 extern void kunmap(KMap*);
 extern uintptr mmukmap(uintptr, uintptr, usize);
 extern void* vmap(uvlong, vlong);
 extern void vunmap(void*, vlong);
 
 extern void mmu0init(uintptr*);
-extern void mmu0clear(uintptr*);
+// extern void mmu0clear(uintptr*);
 extern void mmuidmap(uintptr*);
 extern void mmu1init(void);
 extern void meminit(void);
@@ -92,11 +93,15 @@ extern void clockshutdown(void);
 
 /* fpu */
 extern void fpuinit(void);
+extern void fpon(void);
 extern void fpoff(void);
-extern void fpinit(void);
 extern void fpclear(void);
-extern void fpsave(FPsave*);
-extern void fprestore(FPsave*);
+extern FPsave* fpukenter(Ureg*);
+extern void fpukexit(Ureg*, FPsave*);
+extern void fpuprocsave(Proc*);
+extern void fpuprocfork(Proc*);
+extern void fpuprocsetup(Proc*);
+extern void fpuprocrestore(Proc*);
 extern void mathtrap(Ureg*);
 
 /* trap */

@@ -7,7 +7,7 @@
 #include "../port/error.h"
 #include "pool.h"
 #include "io.h"
-#include "sysreg.h"
+#include "../arm64/sysreg.h"
 #include "ureg.h"
 
 #include "rebootcode.i"
@@ -308,7 +308,7 @@ main(void)
 	chandevreset();
 	userinit();
 	mpinit();
-	mmu0clear((uintptr*)L1);
+	// mmu0clear((uintptr*)L1);
 	flushtlb();
 	mmu1init();
 	schedinit();
