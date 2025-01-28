@@ -4,6 +4,7 @@
  * Hacked together by Dave MacFarlane
  * Based off of https://lupyuen.github.io/articles/dsi#appendix-sequence-of-steps-for-pinephone-display-driver as a reference
  */
+#define DEBUG(x) { iprint(x); }
 #include "u.h"
 #include "../port/lib.h"
 
@@ -34,23 +35,24 @@ piord(int offset)
 static void
 piowr(int offset, u32int val)
 {
-	coherence();
+	// iprint("piowr: %ux = %ux\n", PIO + offset, val);
 	*IO(u32int, (PIO + offset)) = val;
+	coherence();
 }
 
-static uchar* demmio;
+static void* demmio;
 static u32int
 derd(int offset)
 {
 	coherence();
-	// print("derd: PADDR(%ullx)\n", PADDR(demmio + offset));
-	return *((u32int *)(demmio + offset));
+	return *IO(u32int, (PIO + offset));
 }
 static void
 dewr(int offset, u32int val)
 {
+	iprint("de: %ux = %ux\n", DE+ offset, val);
+	*IO(u32int, (DE + offset)) = val;
 	coherence();
-	*((u32int* )(demmio + offset)) = val;
 }
 
 static u32int
@@ -62,8 +64,9 @@ rpiord(int offset)
 static void
 rpiowr(int offset, u32int val)
 {
-	coherence();
+	// iprint("rpio: %ux = %ux\n", R_PIO + offset, val);
 	*IO(u32int, (R_PIO + offset)) = val;
+	coherence();
 }
 
 static u32int
@@ -83,19 +86,24 @@ rpwmrd(int offset)
 static void
 pwmwr(int offset, u32int val)
 {
+	// iprint("pwm: %ux = %ux\n", PWM + offset, val);
 	*IO(u32int, (PWM + offset)) = val;
+	coherence();
 }
 static void
 rpwmwr(int offset, u32int val)
 {
+	// iprint("rpwm: %ux = %ux\n", R_PWM + offset, val);
 	*IO(u32int, (R_PWM + offset)) = val;
+	coherence();
 }
 
 static void
 ccuwr(int offset, u32int val)
 {
-	coherence();
+	// iprint("ccwr: %ux = %ux\n", CCUBASE + offset, val);
 	*IO(u32int, (CCUBASE + offset)) = val;
+	coherence();
 }
 static u32int
 ccurd(int offset)
@@ -113,8 +121,9 @@ tconrd(int offset)
 static void
 tconwr(int offset, u32int val)
 {
-	coherence();
+	// iprint("tconwr: %ux = %ux\n", SYSCTL+TCON0 + offset, val);
 	*IO(u32int, (SYSCTL+TCON0 + offset)) = val;
+	coherence();
 }
 static int
 pwrwr(u8int reg, u8int val)
@@ -138,8 +147,9 @@ dsird(int offset)
 static void
 dsiwr(int offset, u32int val)
 {
-	coherence();
+	// iprint("DSI: %ux = %ux\n",DSI + offset, val);
 	*IO(u32int, (DSI + offset)) = val;
+	coherence();
 }
 
 static u32int
@@ -152,11 +162,17 @@ dphyrd(int offset)
 static void
 dphywr(int offset, u32int val)
 {
-	coherence();
+//	iprint("DPHY: %ux = %ux\n",DPHY + offset, val);
 	*IO(u32int, (DPHY + offset)) = val;
+	coherence();
 }
 
-
+static void
+phywr(int offset, u32int val)
+{
+//	iprint("%ux = %ux\n", PHYSDEV + offset, val);
+	*IO(u32int, (PHYSDEV + offset)) = val;
+}
 
 int brightness = 100;
 
@@ -199,18 +215,25 @@ tcon0init(void)
 {
 	// configure video00
 	ccuwr(PLL_VIDEO00_CTRL_REG, (1<<31)|(1<<24)|(0x62<<8)|7);
+	coherence();
 	// enable ldo1 and ldo2
-	ccuwr(PLL_MIPI_CTRL_REG, ccurd(PLL_MIPI_CTRL_REG) | (1<<23) | (1<<22));
+	// ccuwr(PLL_MIPI_CTRL_REG, ccurd(PLL_MIPI_CTRL_REG) | (1<<23) | (1<<22));
+	ccuwr(PLL_MIPI_CTRL_REG, (1<<23) | (1<<22));
+	coherence();
 	delay(100);
 	// configure mipi pll
 	ccuwr(PLL_MIPI_CTRL_REG, (1<<31)|(1<<23)|(1<<22)|(7<<8)|(1<<4)|10);
+	coherence();
 
 	// set tcon0 src clk to mipi pll
-	ccuwr(TCON0_CLK_REG, ccurd(TCON0_CLK_REG) | (1<<31) & ~(7<<24));
+	ccuwr(TCON0_CLK_REG, (1<<31) & ~(7<<24));
+	coherence();
 	// enable tcon0 clk
-	ccuwr(BUS_CLK_GATING_REG1, ccurd(BUS_CLK_GATING_REG1) | (1<<3));
+	ccuwr(BUS_CLK_GATING_REG1, (1<<3));
+	coherence();
 	// deassert tcon0 reset
-	ccuwr(BUS_SOFT_RST_REG1, ccurd(BUS_SOFT_RST_REG1) |(1<<3));
+	ccuwr(BUS_SOFT_RST_REG1, (1<<3));
+	coherence();
 	// disable tcon0 and interrupts
 	tconwr(TCON_GCTL_REG, tconrd(TCON_GCTL_REG) & ~(1<<31));
 	tconwr(TCON_GINT0_REG, 0);
@@ -241,7 +264,7 @@ tcon0init(void)
 
 	// set safe period
 #define TCON_SAFE_PERIOD_REG 0x1f0
-	tconwr(TCON_SAFE_PERIOD_REG, tconrd(TCON_SAFE_PERIOD_REG) & ~(0xfff <<16| 0x7ff << 4|0x7) | (3000<<16)|3);
+	tconwr(TCON_SAFE_PERIOD_REG, (3000<<16)|3);
 
 	// enable output triggers (XXX: This is actually enabling it) 
 	tconwr(TCON0_IO_TRI_REG, 0x7<<29);
@@ -266,7 +289,7 @@ dsiinit(void)
 	// dsiwr(DSI_CTL_REG, dsird(DSI_CTL_REG) | 1);
 	dsiwr(DSI_CTL_REG, 1);
 #define DSI_BASIC_CTL0_REG 0x10
-	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) | (1<<17)|(1<<16)); // crc + ecc
+//	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) | (1<<17)|(1<<16)); // crc + ecc
 	dsiwr(DSI_BASIC_CTL0_REG, (1<<17)|(1<<16)); // crc + ecc
 #define DSI_START_TRANS_REG 0x60
 	dsiwr(DSI_START_TRANS_REG, 10);
@@ -410,6 +433,7 @@ dphyinit(void)
 static void
 lcdreset(void)
 {
+	DEBUG("LCD Reset");
 	// configure PD23 for output
 	piowr(PIO_PD_CFG02, piord(PIO_PD_CFG02) & PIO_CFG_MASK(28) | (1<<28));
 
@@ -909,11 +933,9 @@ static uchar dispon[] = {
 	0x29, /* display on, pg 97 */
 };
 static void
-lcdinit(void)
-{
-	iprint("cmd1\n");
+lcdinit(void) {
+
 	mipidcs(setextc, sizeof(setextc));
-	iprint("cmd2\n");
 	mipidcs(setmipi, sizeof(setmipi));
 	mipidcs(setpowerext, sizeof(setpowerext));
 	mipidcs(setrgbif, sizeof(setrgbif));
@@ -960,6 +982,7 @@ pmicsetup(void)
 static void
 mipihscinit(void)
 {
+	DEBUG("MIPI DSI HSC\n");
 	dsiwr(DSI_INST_JUMP_SEL_REG, 0xf02);
 	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) | 1);
 	delay(1);
@@ -985,84 +1008,83 @@ mipihscinit(void)
 	delay(10);
 }
 
-static void
-phywr(int offset, u32int val)
-{
-	*IO(u32int, (PHYSDEV + offset)) = val;
-}
+
 static void
 dengineinit(void)
 {
+	DEBUG("sram to DMA\n");
 	phywr(0x4, 0); // set sram to dma
 	coherence();
 #define PLL_DE_CTRL_REG 0x48
 	// FIXME: move to ccu. setclkspeed(297Mhz)
+	DEBUG("Set DE clock\n");
 	ccuwr(PLL_DE_CTRL_REG, (1<<31)|(1<<24)|(23<<8)|1);
-	iprint("Waiting for DE clock to be stable");
+	DEBUG("Waiting for DE clock to be stable");
 	coherence();
 	while((ccurd(PLL_DE_CTRL_REG) & (1<<28)) == 0){
 		delay(1);
 	}
 #define DE_CLK_REG 0x104
 	ccuwr(DE_CLK_REG, ccurd(DE_CLK_REG) & ~(1<<31 | 7<<24) | ((1<<31)|(1<<24)));
-	iprint("DE_CLK_REG: %ux\n", ccurd(DE_CLK_REG));
+	iprint("DE_CLK_REG: %ux\n", ccurd(DE_CLK_REG)); delay(100);
 	ccuwr(BUS_SOFT_RST_REG1, ccurd(BUS_SOFT_RST_REG1) |(1<<12));
 	ccuwr(BUS_CLK_GATING_REG1, ccurd(BUS_CLK_GATING_REG1) |(1<<12));
 	delay(100);
 #define SCLK_GATE 0x0
-	iprint("sclk\n");
+	DEBUG("sclk\n"); delay(1000);
 	coherence();
 	dewr(SCLK_GATE, derd(SCLK_GATE) | 1);
 #define AHB_RESET 0x8
-	iprint("ahbreset\n");
+	DEBUG("ahbreset\n"); delay(1000);
 	dewr(AHB_RESET, derd(AHB_RESET) | 1);
 #define HCLK_GATE 0x4
-	iprint("hclk_gate\n");
+	DEBUG("hclk_gate\n");
 	dewr(HCLK_GATE, derd(HCLK_GATE) | 1);
 
 #define DE2TCON_MUX 0x10
-	iprint("de2tcon\n");
+	DEBUG("de2tcon\n");
 	dewr(DE2TCON_MUX, derd(DE2TCON_MUX) & ~(1));
 
-#define MIXER0 (DE+0x100000)
-	iprint("mixer0 to 0x5fff\n");
+#define MIXER0 (0x100000)
+	DEBUG("mixer0 to 0x5fff\n");
 	for(int i = 0; i < 0x6000; i+= 4){
 		dewr(MIXER0 + i, 0);
 	}
 #define VIDEO_SCALER_CH0(n) (MIXER0 + 0x20000 + n)
 #define UI_SCALER_CH0(n) (MIXER0 + 0x40000 + n)
 #define UI_SCALER_CH1(n) (MIXER0 + 0x50000 + n)
-	iprint("video scaler\n");
-	dewr(VIDEO_SCALER_CH0(0), derd(VIDEO_SCALER_CH0(0)) & ~1);
+	DEBUG("video scaler\n");
+	dewr(VIDEO_SCALER_CH0(0), 0);
+	dewr(MIXER0 + 0x30000, 0); //??
 dewr(VIDEO_SCALER_CH0(0), 0);
-	iprint("ui scaler\n");
-	dewr(UI_SCALER_CH0(0), derd(UI_SCALER_CH0(0)) & ~1);
+	DEBUG("ui scaler\n");
+	dewr(UI_SCALER_CH0(0), 0);
 dewr(UI_SCALER_CH0(0),0);
-	iprint("ui scaler1\n");
-	dewr(UI_SCALER_CH1(0), derd(UI_SCALER_CH1(0)) & ~1);
+	DEBUG("ui scaler1\n");
+	dewr(UI_SCALER_CH1(0), 0);
 dewr(UI_SCALER_CH1(0), 0);
-	iprint("fce 0xa0000\n");
+	DEBUG("fce 0xa0000\n");
 	dewr(MIXER0 + 0xa0000, derd(MIXER0 + 0xa0000) & ~1);
-	iprint("bws a2000\n");
+	DEBUG("bws a2000\n");
 dewr(MIXER0 + 0xa2000, 0);
-	iprint("lti a4000\n");
+	DEBUG("lti a4000\n");
 	dewr(MIXER0 + 0xa4000, 0);
 
-	iprint("peaking a6000\n");
+	DEBUG("peaking a6000\n");
 	dewr(MIXER0 + 0xa6000, 0);
-	iprint("ase a8000\n");
+	DEBUG("ase a8000\n");
 	dewr(MIXER0 + 0xa8000, 0);
-	iprint("fcc aa000\n");
+	DEBUG("fcc aa000\n");
 	dewr(MIXER0 + 0xaa000, 0);
 #define DRCBASE 0x11b0000
-	iprint("DRC\n");
+	DEBUG("DRC\n");
 //	u32int* drcbase = vmap(DRCBASE, 1024);
 	coherence();
 //	*(drcbase + 0) = *(drcbase + 0) & ~1;
 //*(drcbase + 0) = 0;
 	dewr(MIXER0 + 0xb0000, 0);
 	delay(1000);
-	iprint("enable mixer0\n");
+	DEBUG("enable mixer0\n");
 	dewr(MIXER0, derd(MIXER0) | 1);
 }
 
@@ -1070,6 +1092,7 @@ u32int *fb;
 static void
 displaysomething(void) {
 	iprint("Display something\n");
+	//fb = fbmemalloc(720*1440*4);
 	fb = malloc(720*1440*4);
 	iprint("Alloced\n");
 	for(int i = 0;i < 720*1440; i++) {
@@ -1079,7 +1102,7 @@ displaysomething(void) {
 #define BLD(x) (MIXER0 + 0x1000 + x)
 	//BLK_BK_COLOR
 	iprint("blk_bk_color\n");
-	dewr(BLD(0x88), 0xff00ff00); // red bg
+	dewr(BLD(0x88), 0xffff0000); // black bg
 	// BLD_PREMUL_CTL
 	iprint("blk_premul_ctl\n");
 	dewr(BLD(0x84), 0);
@@ -1087,7 +1110,7 @@ displaysomething(void) {
 #define OVL_UI(i, reg) (MIXER0 + (0x2000 + 0x1000*i) + reg)
 #define OVL_UI_ATTR_CTRL 0x00
 	for(int i = 0; i < 4; i++){
-		// disable ui overlay, channel 1-3
+		// disable ui overlay, channel 0-3
 		iprint("disable ch%d overlay\n", i);
 		dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), 0);
 		// disable ui scaler, channel 1-3
@@ -1098,10 +1121,12 @@ displaysomething(void) {
 	iprint("set overlay\n");
 	// set overlay for channel 0. opaque, xrgb, alphamode 2, enable
 	int i = 1;
-	dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), 0xff000405 | (1<<15));
+	// dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), 0xff000405 | (1<<15));
+	dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), (0xff<<24)|(1<<4)|(1<<0));
 #define OVL_UI_TOP_LADD 0x10
 	iprint("set top\n");
-	dewr(OVL_UI(i, OVL_UI_TOP_LADD), PADDR(fb));
+//	dewr(OVL_UI(i, OVL_UI_TOP_LADD), PADDR(fb));
+ dewr(OVL_UI(i, OVL_UI_TOP_LADD), 0); // just use fill colour, testing.
 #define OVL_UI_PITCH 0xc
 iprint("set pitch\n");
 	dewr(OVL_UI(i, OVL_UI_PITCH), 720*4);
@@ -1115,7 +1140,8 @@ iprint("set uisize\n");
 #define OVL_UI_COORD 0x8
 iprint("setcoord\n");
 	dewr(OVL_UI(i, OVL_UI_COORD), 0);
-	
+#define OVL_UI_FILL_COLOR 0x18
+	dewr(OVL_UI(i, OVL_UI_FILL_COLOR), 0xffff00ff);
 	// set blender output
 iprint("BLD_SIZE\n");
 	dewr(BLD(0x8c), ((1440-1) << 16) + (720-1));
@@ -1130,7 +1156,8 @@ iprint("bld pipe fcolor\n");
 iprint("bld offset\n");
 	dewr(BLD(0xc + i*0x10), 0); // offset, none
 iprint("bld pipe mode\n");
-	dewr(BLD(0x90 + i*0x4), 0x03010301); // use coefficient of 1 for the blender source and dst
+	dewr(BLD(0x88), 0xffff00ff); // BLD_BK_COLOR, red
+	dewr(BLD(0x90), 0x03010301); // use coefficient of 1 for the blender source and dst
 
 	// disable scaler (already done) by init
 	dewr(MIXER0 + 0x40000, 0);
@@ -1153,33 +1180,25 @@ deinit(void)
 	backlightinit();
 	backlight(90);
 
-	// DE is below PHYSIO, so we need to map it in for dewr and derd.
-	// 
-	// We should probably just fix this in io.h
-	demmio = vmap(DE, 1024);
-	for(int i = 0; i < 4*1024; i++){
-		vmap(DE+(i*1024), 1024);
-	}
-	coherence();
-	iprint("deinit\n");
+	DEBUG("deinit\n");
 
-	iprint("tcon0 init\n");
+	DEBUG("tcon0 init\n");
 	tcon0init();
-	iprint("pmic setup\n");
+	DEBUG("pmic setup\n");
 	pmicsetup(); // pmic was already initialized for rsb, just need to configure.
-	iprint("dsi block\n");
+	DEBUG("dsi block\n");
 	dsiinit();	// enable mipi dsi block
-	iprint("dphyinit\n");
+	DEBUG("dphyinit\n");
 	dphyinit(); // enable mipi physical layer
-	iprint("lcd reset\n");
+	DEBUG("lcd reset\n");
 	lcdreset(); // reset lcd panel and wait 15 ms
-	iprint("lcd init\n");
+	DEBUG("lcd init\n");
 	lcdinit(); // initialize lcd controller
-	iprint("hsc + hsd\n");
+	DEBUG("hsc + hsd\n");
 	mipihscinit();// start mipi hsc
-	iprint("de engine init\n");
+	DEBUG("de engine init\n");
 	dengineinit(); // initialize display engine
 	delay(160); // wait 160ms
-	iprint("rendering\n");
+	DEBUG("rendering\n");
 	displaysomething();
 }
