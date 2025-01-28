@@ -8,7 +8,7 @@
 #include "fns.h"
 #include "io.h"
 #include "ureg.h"
-#include "sysreg.h"
+#include "../arm64/sysreg.h"
 
 static uvlong freq;
 
