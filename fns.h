@@ -206,3 +206,7 @@ extern int setpmicvolt(char*, int);
 
 /* archA64 */
 extern void arch_rsbsetup(void);
+
+/* display */
+extern void backlight(int);
+extern void deinit(void);
