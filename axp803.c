@@ -117,7 +117,7 @@ int
 setpmicstate(char *name, int state)
 {
 	u8int buf;
-	Pmicregs *pr;// = pmicregs;
+	Pmicregs *pr = pmicregs;
 
 	pr = findpmicrail(name);
 
@@ -126,7 +126,7 @@ setpmicstate(char *name, int state)
 
 	buf = pwrrd(pr->onoffreg);
 
-	iprint("setstate: %s = %d _ %08ub_", name, state, buf);
+//	iprint("setstate: %s = %d _ %08ub_", name, state, buf);
 
 	if((buf & 1<<pr->onoffbit) == (state<<pr->onoffbit))
 		return 1;
@@ -136,7 +136,7 @@ setpmicstate(char *name, int state)
 	else
 		buf ^= 1<<pr->onoffbit;
 
-	iprint("%08ub\n", buf);
+//	iprint("%08ub\n", buf);
 
 	if(pwrwr(pr->onoffreg, buf))
 		return 1;
@@ -186,7 +186,7 @@ int
 setpmicvolt(char *name, int val)
 {
 	u8int buf;
-	Pmicregs *pr;// = pmicregs;
+	Pmicregs *pr = pmicregs;
 
 	pr = findpmicrail(name);
 
@@ -199,10 +199,10 @@ setpmicvolt(char *name, int val)
 	if(val < pr->voltbase)
 		val = pr->voltbase;
 
-	if(val <= pr->voltsplit){
+	if(val <= pr->voltsplit)
 		buf = (u8int)((val - pr->voltbase) / pr->voltstep1);
 		buf &= pr->voltmask;
-	}
+
 	if(val > pr->voltsplit){
 		int mvl, mvh;
 		mvl = (pr->voltsplit - pr->voltbase) / pr->voltstep1;
@@ -211,7 +211,7 @@ setpmicvolt(char *name, int val)
 		buf &= pr->voltmask;
 	}
 
-	iprint("setvolt: %ud\n", buf);
+//	iprint("setvolt: %ud\n", buf);
 
 	if(pwrwr(pr->voltreg, buf))
 		return 1;

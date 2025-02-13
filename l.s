@@ -1,5 +1,5 @@
 #include "mem.h"
-#include "sysreg.h"
+#include "../arm64/sysreg.h"
 
 #undef	SYSREG
 #define	SYSREG(op0,op1,Cn,Cm,op2)	SPR(((op0)<<19|(op1)<<16|(Cn)<<12|(Cm)<<8|(op2)<<5))
@@ -745,4 +745,19 @@ TEXT zoot(SB), 1, $-4
 /* for debug waves */
 TEXT voot(SB), 1, $-4
 	VWAVE('W')
+	RETURN
+
+/*
+ * floating-point support.
+ */
+TEXT fpon(SB), 1, $-4
+	MOVW $(3<<20), R0
+	MSR R0, CPACR_EL1
+	ISB $SY
+	RETURN
+
+TEXT fpoff(SB), 1, $-4
+	MOVW $(0<<20), R0
+	MSR R0, CPACR_EL1
+	ISB $SY
 	RETURN

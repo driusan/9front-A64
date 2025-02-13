@@ -29,7 +29,7 @@
 #define	PGROUND(s)	ROUND(s, BY2PG)
 
 /* effective virtual address space */
-#define EVASHIFT	42
+#define EVASHIFT	34
 #define EVAMASK		((1ULL<<EVASHIFT)-1)
 
 #define PTSHIFT		(PGSHIFT-3)
@@ -42,8 +42,6 @@
 #define L1TABLES	((-KSEG0+PGLSZ(2)-1)/PGLSZ(2))
 #define L1TABLE(v, l)	(L1TABLES - ((PTLX(v, 2) % L1TABLES) >> (((l)-1)*PTSHIFT)) + (l)-1)
 #define L1TOPSIZE	(1ULL << (EVASHIFT - PTLEVELS*PTSHIFT))
-#define L1BOT		((L1-L1TOPSIZE)&-BY2PG)
-#define MPIDMASK	3ULL			/* MPIDR_EL1 affinity bits signifying the CPUID */
 
 #define	MAXMACH		4			/* max # cpus system can run */
 #define	MACHSIZE	(8*KiB)
@@ -57,12 +55,15 @@
 #define	UCRAMSIZE	(8*MiB)
 
 #define VDRAM		(0xFFFFFFFFC0000000ULL)	/* 0x40000000 - 0x80000000 */
-#define	KTZERO		(VDRAM + 0x80000)	/* 0x40100000 - kernel text start */
+#define	KTZERO		(VDRAM + 0x100000)	/* 0x40100000 - kernel text start */
 
-#define	VIRTIO		(0xFFFFFF0000000000ULL)	/* 0x30000000 */
+#define	VIRTIO		(0xFFFFFFFFB0000000ULL)	/* 0x30000000 */
 
-#define	PHYSIO		0x0
-#define IOSIZE		0x0200000
+//#define	PHYSIO		0x0
+//#define	IOSIZE		0x10000000
+
+#define	PHYSIO	0x01C00000
+#define	IOSIZE	0x303C00
 
 #define	PHYSDRAM	0x40000000
 #define	DRAMSIZE	0x80000000

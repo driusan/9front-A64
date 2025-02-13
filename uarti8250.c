@@ -147,8 +147,8 @@ static Uart i8250uart[] = {
 
 static void emptyoutstage(Uart*, int);
 
-static long
-i8250status(Uart* uart, void* buf, long n, long offset)
+/* static void
+i8250status(Uart* uart, char*, char*)
 {
 	char *p;
 	Ctlr *ctlr;
@@ -189,10 +189,8 @@ i8250status(Uart* uart, void* buf, long n, long offset)
 	);
 	n = readstr(offset, buf, n, p);
 	free(p);
-
-	return n;
 }
-
+*/
 static void
 i8250fifo(Uart* uart, int level)
 {

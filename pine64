@@ -44,7 +44,6 @@ misc
 	rsb
 	axp803
 	sdmmc sdhc
-	display
 
 port
 	int cpuserver = 0;
