@@ -4,7 +4,7 @@
  * Hacked together by Dave MacFarlane
  * Based off of https://lupyuen.github.io/articles/dsi#appendix-sequence-of-steps-for-pinephone-display-driver as a reference
  */
-#define DEBUG(x) { iprint(x); }
+#define DEBUG(x) { /* iprint(x); */}
 #include "u.h"
 #include "../port/lib.h"
 
@@ -12,6 +12,13 @@
 #include "dat.h"
 #include "fns.h"
 #include "io.h"
+
+#define Image IMAGE
+#include <draw.h>
+#include <memdraw.h>
+#include <cursor.h>
+#include "screen.h"
+
 #define R_PWM_CTRL_REG 0x0
 #define	R_PWM_CH0_PERIOD 0x04
 
@@ -50,7 +57,7 @@ derd(int offset)
 static void
 dewr(int offset, u32int val)
 {
-	iprint("de: %ux = %ux\n", DE+ offset, val);
+//	iprint("de: %ux = %ux\n", DE+ offset, val);
 	*IO(u32int, (DE + offset)) = val;
 	coherence();
 }
@@ -1088,75 +1095,67 @@ dewr(MIXER0 + 0xa2000, 0);
 	dewr(MIXER0, derd(MIXER0) | 1);
 }
 
-u32int *fb;
 static void
 displaysomething(void) {
-	iprint("Display something\n");
-	//fb = fbmemalloc(720*1440*4);
-	fb = malloc(720*1440*4);
-	iprint("Alloced\n");
-	for(int i = 0;i < 720*1440; i++) {
-		// random pattern
-		fb[i] = 0xffff00ff | ((i%255)<<8);
-	}
+	u32int *fb = screeninit(720, 1440, 32);
 #define BLD(x) (MIXER0 + 0x1000 + x)
 	//BLK_BK_COLOR
-	iprint("blk_bk_color\n");
-	dewr(BLD(0x88), 0xffff0000); // black bg
+	dewr(BLD(0x88), 0xff000000); // black bg
 	// BLD_PREMUL_CTL
-	iprint("blk_premul_ctl\n");
+	// iprint("blk_premul_ctl\n");
 	dewr(BLD(0x84), 0);
 	// disable ui overlay, channel 1-3
 #define OVL_UI(i, reg) (MIXER0 + (0x2000 + 0x1000*i) + reg)
 #define OVL_UI_ATTR_CTRL 0x00
 	for(int i = 0; i < 4; i++){
 		// disable ui overlay, channel 0-3
-		iprint("disable ch%d overlay\n", i);
+		// iprint("disable ch%d overlay\n", i);
 		dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), 0);
 		// disable ui scaler, channel 1-3
-		iprint("disable ch%d scaler\n", i);
+		// iprint("disable ch%d scaler\n", i);
 		dewr(MIXER0 + 0x40000 + (0x10000*i), 0);
 	}
 
-	iprint("set overlay\n");
+	// iprint("set overlay\n");
 	// set overlay for channel 0. opaque, xrgb, alphamode 2, enable
 	int i = 1;
-	// dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), 0xff000405 | (1<<15));
-	dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), (0xff<<24)|(1<<4)|(1<<0));
+	dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), 0xff000405 | (1<<15));
+	//dewr(OVL_UI(i, OVL_UI_ATTR_CTRL), (0xff<<24)|(1<<4)|(1<<0));
 #define OVL_UI_TOP_LADD 0x10
-	iprint("set top\n");
+//	iprint("set top\n");
 	dewr(OVL_UI(i, OVL_UI_TOP_LADD), PADDR(fb));
 // dewr(OVL_UI(i, OVL_UI_TOP_LADD), 0); // just use fill colour, testing.
 #define OVL_UI_PITCH 0xc
-iprint("set pitch\n");
+// iprint("set pitch\n");
 	dewr(OVL_UI(i, OVL_UI_PITCH), 720*4);
 #define OVL_UI_MBSIZE 0x4
-iprint("set mbsize\n");
+// iprint("set mbsize\n");
 	dewr(OVL_UI(i, OVL_UI_MBSIZE), ((1440-1) << 16) + (720-1));
 #define OVL_UI_SIZE 0x88
-iprint("set uisize\n");
+// iprint("set uisize\n");
 	dewr(OVL_UI(i, OVL_UI_SIZE), ((1440-1) << 16) + (720-1));
 
 #define OVL_UI_COORD 0x8
-iprint("setcoord\n");
+// iprint("setcoord\n");
 	dewr(OVL_UI(i, OVL_UI_COORD), 0);
 #define OVL_UI_FILL_COLOR 0x18
-	dewr(OVL_UI(i, OVL_UI_FILL_COLOR), 0xffff00ff);
+	// dewr(OVL_UI(i, OVL_UI_FILL_COLOR), 0xff000000);
 	// set blender output
-iprint("BLD_SIZE\n");
+// iprint("BLD_SIZE\n");
 	dewr(BLD(0x8c), ((1440-1) << 16) + (720-1));
-iprint("GLB_SIZE\n");
+// iprint("GLB_SIZE\n");
 	dewr(MIXER0 + 0xc, ((1440-1) << 16) + (720-1));
 
+	i = 0;
 	// set blender input
-iprint("BLD_CH_ISIZE\n");
+// iprint("BLD_CH_ISIZE\n");
 	dewr(BLD(0x8 + i*0x10), ((1440-1) << 16) + (720-1));
-iprint("bld pipe fcolor\n");
+// iprint("bld pipe fcolor\n");
 	dewr(BLD(0x4 + i*0x10), 0xffff0000); // fill color, red
-iprint("bld offset\n");
+// iprint("bld offset\n");
 	dewr(BLD(0xc + i*0x10), 0); // offset, none
-iprint("bld pipe mode\n");
-	dewr(BLD(0x88), 0xffff00ff); // BLD_BK_COLOR, red
+// iprint("bld pipe mode\n");
+	dewr(BLD(0x88), 0xff000000); // BLD_BK_COLOR, red
 	dewr(BLD(0x90), 0x03010301); // use coefficient of 1 for the blender source and dst
 
 	// disable scaler (already done) by init
@@ -1164,23 +1163,22 @@ iprint("bld pipe mode\n");
 
 	coherence();
 	dewr(BLD(0x80), 1);
-iprint("8\n");
+// iprint("8\n");
 	coherence();
 	dewr(BLD(0x0), 0x101);
-iprint("dbuffering!!\n");
+// iprint("dbuffering!!\n");
 	coherence();
 	dewr(MIXER0 + 0x8, 1); // enable double buffering
-	iprint("Can you see anything?\n");
+// 	iprint("Can you see anything?\n");
 }
 
 void
 deinit(void)
 {
-//	void* tmp = ucalloc(720*1440*4);
-	iprint("Backlight");
+//	iprint("Backlight");
 	backlightinit();
 	backlight(90);
-
+iprint("physio+io %d VDRAM-kzero %p\n", PHYSIO+IOSIZE, VDRAM-KZERO);
 	DEBUG("deinit\n");
 
 	DEBUG("tcon0 init\n");
@@ -1202,4 +1200,10 @@ deinit(void)
 	delay(160); // wait 160ms
 	DEBUG("rendering\n");
 	displaysomething();
+}
+
+
+void
+blankscreen(int blank)
+{
 }
