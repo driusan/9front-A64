@@ -126,7 +126,7 @@ typedef struct Ctlr {
 extern PhysUart i8250physuart;
 
 static Ctlr i8250ctlr[] = {
-{	.io	= (u32int*)PHYSCONS,
+{	.io	= (u32int*) PHYSCONS,
 	.irq	= IRQuart0,
 	.tbdf	= -1,
 	.poll	= 0, },
@@ -147,20 +147,18 @@ static Uart i8250uart[] = {
 
 static void emptyoutstage(Uart*, int);
 
-/* static void
-i8250status(Uart* uart, char*, char*)
+static char*
+i8250status(Uart* uart, char* p, char* e)
 {
-	char *p;
 	Ctlr *ctlr;
 	uchar ier, lcr, mcr, msr;
 
 	ctlr = uart->regs;
-	p = malloc(READSTR);
 	mcr = ctlr->sticky[Mcr];
 	msr = csr8r(ctlr, Msr);
 	ier = ctlr->sticky[Ier];
 	lcr = ctlr->sticky[Lcr];
-	snprint(p, READSTR,
+	return seprint(p, e,
 		"b%d c%d d%d e%d l%d m%d p%c r%d s%d i%d\n"
 		"dev(%d) type(%d) framing(%d) overruns(%d) "
 		"berr(%d) serr(%d)%s%s%s%s\n",
@@ -187,10 +185,8 @@ i8250status(Uart* uart, char*, char*)
 		(msr & Dcd) ? " dcd": "",
 		(msr & Ri) ? " ring": ""
 	);
-	n = readstr(offset, buf, n, p);
-	free(p);
 }
-*/
+
 static void
 i8250fifo(Uart* uart, int level)
 {
@@ -693,7 +689,7 @@ PhysUart i8250physuart = {
 	.modemctl	= i8250modemctl,
 	.rts		= i8250rts,
 	.dtr		= i8250dtr,
-	// .status		= i8250status,
+    .status		= i8250status,
 	.fifo		= i8250fifo,
 	.getc		= i8250getc,
 	.putc		= i8250putc,
