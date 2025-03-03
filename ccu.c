@@ -422,6 +422,19 @@ getclkrate(int clkid)
 		n = 1<<n;
 		m = (reg & 0xf)+1;
 		return ref / n / m;
+	case AHB1_APB1_CFG_REG:
+	case APB2_CFG_REG:
+		ref = (reg >> 24) & 0x3;
+		if (ref == 0)
+			ref = 32*1000; /* LOSC = 32Khz? */
+		else if (ref == 1)
+			ref = SYSCLOCK;
+		else
+			ref = getclkrate(PLL_PERIPH0_CTRL_REG)*2;
+		n = (reg >> 16) & 0x3;
+		n = 1<<n;
+		m = (reg & 0xf) + 1;		
+		return ref / n / m;		
 	default:
 		panic("Unhandled clock");
 	}

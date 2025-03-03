@@ -13,7 +13,7 @@
 #define	PLL_DDR1_CTRL_REG		0x004C		//PLL_DDR1 Control Register
 #define	CPU_AXI_CFG_REG			0x0050		//CPUX/AXI Configuration Register
 #define	AHB1_APB1_CFG_REG		0x0054		//AHB1/APB1 Configuration Register
-#define	APB2 _CFG_REG			0x0058		//APB2 Configuration Register
+#define	APB2_CFG_REG			0x0058		//APB2 Configuration Register
 #define	AHB2_CFG_REG			0x005C		//AHB2 Configuration Register
 #define	BUS_CLK_GATING_REG0		0x0060		//Bus Clock Gating Register 0
 #define	BUS_CLK_GATING_REG1		0x0064		//Bus Clock Gating Register 1

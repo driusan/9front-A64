@@ -17,15 +17,18 @@ dev
 	bridge	log
 	ip	arp chandial ip ipv6 ipaux iproute netlog nullmedium pktmedium inferno
 	draw	screen swcursor
-	mouse	screen swcursor
+#	mouse	screen swcursor
+	mouse
 	uart
 	rtc
 	sd
+	i2c
 
 link
 	ethermedium
 	loopbackmedium
 	netdevmedium
+	i2csunxi	devi2c
 #	ethersunxi	ethermii
 	sdhc
 
