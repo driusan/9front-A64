@@ -397,18 +397,18 @@ io(I2Cdev *dev, uchar *pkt, int olen, int ilen)
 		o = 0;
 		goto ioout;
 	}
-	twiwr(ctlr, TWI_CNTR, INT_EN | BUS_EN | INT_FLAG | A_ACK);
 	/* Restart with read bit set */
 	for(int i = 1; i <= ilen;i++){
 		ctlr->ack = -1;
-		pkt[o++] = twird(ctlr, TWI_DATA);
 		twiwr(ctlr, TWI_CNTR, INT_EN | BUS_EN | INT_FLAG | (i == ilen-1 ? A_ACK : 0));
 		tsleep(&ctlr->r, return0, nil, 1000);
 		while(ctlr->ack == -1);
 		if(ctlr->ack != 1) {
-			print("%s: Could not read byte, ack: %x\n", ctlr->gatename, ctlr->ack);
-			
+			print("%s: Could not read byte, ack: %x\n", ctlr->gatename, ctlr->ack);	
 		}
+		pkt[o++] = twird(ctlr, TWI_DATA);
+
+
 		DEBUG print("Read byte: %x\n", pkt[o-1]);
 	}
 
