@@ -359,8 +359,18 @@ pmicread(Chan*, void *a, long n, vlong offset)
 	l += snprint(p+l, READSTR-l, "VBAT = %s\n", pmic_vbat() ? "on" : "off");
 
 	i = 0;
+	char *cstate;
+	int state;
 	while((name = getpmicname(i)) != nil){
-		l += snprint(p+l, READSTR-l, "%s\t%s\t%dmV\n", name, getpmicstate(i) ? "on" : "off", getpmicvolt(i));
+		state = getpmicstate(i);
+		if (state == -1)
+			cstate = "?";
+		else if(state){
+			cstate = "on";
+		} else {
+			cstate = "off";
+		}
+		l += snprint(p+l, READSTR-l, "%s\t%s\t%dmV\n", name, cstate, getpmicvolt(i));
 		i++;
 	}
 
@@ -502,6 +512,12 @@ archinit(void)
 	thermalinit();
 	iprint("rsbinit\n");
 	rsbinit();
+	/* These should go in the conf file instead of devarch,
+		but they need to be called after rsbinit.
+		Moving rsb to the conf file causes things to freeze on boot
+		(presumably because of some other timing/order dependency
+	*/
+	lcdinit();
 	deinit();
 
 	addarchfile("keyadc", 0444, keyadcread, nil);

@@ -322,6 +322,8 @@ clkenable(int clkid)
 	case SDMMC0_CLK_REG:
 	case SDMMC1_CLK_REG:
 	case SDMMC2_CLK_REG:
+	case PLL_DE_CTRL_REG:
+	case DE_CLK_REG:
 		reg = ccurd(clkid);
 		reg |= CLK_ENABLED;	
 		ccuwr(clkid, reg);
@@ -389,6 +391,32 @@ setclkrate(int clkid, ulong hz)
 			| ((m-1) & SDMMC_CLK_M_MASK);
 		ccuwr(clkid, reg);
 		break;
+	case DE_CLK_REG:
+		/* FIXME: Can probably do better, but these are always used together for now, so just set PLL_DE_CTRL_REG and use it as the reference with an m of 1 */
+		reg = ccurd(clkid);
+		setclkrate(PLL_DE_CTRL_REG, hz);
+		reg = reg & ~(0x7<<24 | 0xf);
+		reg = reg | (1<<24);
+		ccuwr(clkid, reg);
+		break;
+	case PLL_DE_CTRL_REG:
+		reg = ccurd(clkid);
+		n = hz / (24*Mhz);
+		m = 0;
+		while(n > 0x7f) {
+			n /= 2;
+			m++;
+		}
+		reg |= 25; /* 297Mhz */
+		reg |= 1; /* Integer mode */
+		reg = reg & ~((0x7f<<8) | (0xf));
+		reg |= (n-1)<<8;
+		reg |= m;
+		ccuwr(PLL_DE_CTRL_REG, reg);
+		while(ccurd(PLL_DE_CTRL_REG) & (1<<28) == 0){
+			delay(1);
+		}
+		break;
 	default:
 		panic("Unhandled clock");
 	}
@@ -434,7 +462,25 @@ getclkrate(int clkid)
 		n = (reg >> 16) & 0x3;
 		n = 1<<n;
 		m = (reg & 0xf) + 1;		
-		return ref / n / m;		
+		return ref / n / m;
+	case PLL_DE_CTRL_REG:
+		if (!(reg & CLK_ENABLED))
+			return 0;
+		n = (reg >> 8)&0x7f;
+		m = reg & 0xf;
+		return 24*Mhz*(n+1) / (m+1);
+	case DE_CLK_REG:
+		if (!(reg & CLK_ENABLED))
+			return 0;
+		ref = (reg >> 24) & 0x3;
+		if (ref == 0)
+			ref = getclkrate(PLL_PERIPH0_CTRL_REG)*2;
+		else if (ref == 1)
+			ref = getclkrate(PLL_DE_CTRL_REG);
+		else
+			return 0;
+		m = (ref & 0xf) + 1;
+		return ref / m;
 	default:
 		panic("Unhandled clock");
 	}

@@ -42,13 +42,14 @@ ip
 	ipmux
 
 misc
+	rsb
 	uarti8250
 	keyadc
 	ccu
 	thermal
-	rsb
 	axp803
 	sdmmc sdhc
+	lcd
 	display
 
 port

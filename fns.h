@@ -210,3 +210,6 @@ extern void arch_rsbsetup(void);
 /* display */
 extern void backlight(int);
 extern void deinit(void);
+
+/* lcd */
+extern void lcdinit(void);

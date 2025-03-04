@@ -409,3 +409,9 @@ rsbinit(void)
 
 }
 
+void
+rsblink(void)
+{
+	iprint("rsbinit\n");
+	rsbinit();
+}

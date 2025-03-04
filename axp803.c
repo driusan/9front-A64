@@ -104,7 +104,9 @@ getpmicstate(int rail)
 	Pmicregs *pr = pmicregs;
 
 	pr += rail;
-
+	if(pr->onoffreg == 0){
+		return -1;
+	}
 	buf = pwrrd(pr->onoffreg);
 
 	buf &= 1<<pr->onoffbit;
@@ -121,7 +123,7 @@ setpmicstate(char *name, int state)
 
 	pr = findpmicrail(name);
 
-	if(pr == nil)
+	if(pr == nil || pr->onoffreg == 0)
 		return -1;
 
 	buf = pwrrd(pr->onoffreg);
