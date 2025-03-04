@@ -31,6 +31,7 @@ link
 	i2csunxi	devi2c
 #	ethersunxi	ethermii
 	sdhc
+	backlight
 
 ip
 	tcp
@@ -51,6 +52,7 @@ misc
 	sdmmc sdhc
 	lcd
 	display
+	backlight
 
 port
 	int cpuserver = 0;

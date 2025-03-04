@@ -208,8 +208,11 @@ extern int setpmicvolt(char*, int);
 extern void arch_rsbsetup(void);
 
 /* display */
-extern void backlight(int);
 extern void deinit(void);
 
 /* lcd */
 extern void lcdinit(void);
+
+/* backlight */
+extern void backlightinit(void);
+extern void backlight(int);

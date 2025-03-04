@@ -103,6 +103,7 @@ ccurd(int offset)
 	coherence();
 	return *IO(u32int, (CCUBASE + offset));
 }
+
 static u32int
 piord(int offset)
 {
