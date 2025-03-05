@@ -74,8 +74,14 @@ LIB=\
 
 9:V:	$p$CONF
 
+$p$CONF.u:D:	$p$CONF
+	aux/aout2uimage -Z $kzero $p$CONF
+
 $p$CONF:D:	$OBJ $CONF.$O $LIB
 	$LD -a -o $target -H6 -R0x10000 -T$loadaddr -l $prereq >DEBUG
+
+#$p$CONF:D:	$OBJ $CONF.$O $LIB
+#	$LD -o $target -t$loadaddr -l $prereq
 
 $OBJ: $HFILES
 
@@ -105,6 +111,9 @@ cache.v8.$O: ../arm64/sysreg.h
 #mmu.$O: /$objtype/include/ureg.h
 #l.$O mmu.$O: mem.h
 #l.$O mmu.$O: sysreg.h
+
+devusb.$O:	../port/usb.h
+usbehci.$O usbohci.$O usbuhci.$O: ../port/usb.h usbehci.h
 
 initcode.out:		init9.$O initcode.$O /$objtype/lib/libc.a
 	$LD -l -R1 -s -o $target $prereq

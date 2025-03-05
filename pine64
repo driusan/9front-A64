@@ -23,6 +23,7 @@ dev
 	rtc
 	sd
 	i2c
+	usb
 
 link
 	ethermedium
@@ -32,6 +33,7 @@ link
 #	ethersunxi	ethermii
 	sdhc
 	backlight
+	usbehci usbehcisunxi
 
 ip
 	tcp
@@ -52,7 +54,6 @@ misc
 	sdmmc sdhc
 	lcd
 	display
-	backlight
 
 port
 	int cpuserver = 0;
