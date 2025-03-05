@@ -13,7 +13,7 @@
 #include "fns.h"
 #include "io.h"
 
-#define DEBUG if(1)
+#define DEBUG if(0)
 
 #define R_PWM_CTRL_REG 0x0
 #define	R_PWM_CH0_PERIOD 0x04
@@ -380,7 +380,6 @@ dphyinit(void)
 static void
 lcdreset(void)
 {
-	DEBUG("LCD Reset");
 	// configure PD23 for output
 	piowr(PIO_PD_CFG02, piord(PIO_PD_CFG02) & PIO_CFG_MASK(28) | (1<<28));
 
