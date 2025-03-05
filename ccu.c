@@ -328,6 +328,21 @@ clkenable(int clkid)
 		reg |= CLK_ENABLED;	
 		ccuwr(clkid, reg);
 		return;
+	case USBPHY_CFG_REG:
+		/* Most registers control 1 clock, but this controls many. We enable them all. */
+		reg = ccurd(clkid);
+		reg |= 3<<16; /* otg-ohci + ohci0 */
+		/* reg |= 1<<11;  12m hsic 
+		reg |= 1<<10;  hsic */
+		reg |= 1<<9; /* usbphy1 */
+		reg |= 1<<8; /* usbphy0 */
+		ccuwr(clkid, reg);
+		/* FIXME: Check if this can be done in the same ccuwr after USB is working. */
+		/* reg |= 1<<2; deassert reset, usb hsic */
+		reg |= 1<<1; /* deassert reset, usbphy1 */
+		reg |= 1<<0; /* deassert reset, usbphy0 */
+		ccuwr(clkid, reg);
+		return;
 	default:
 		panic("Unhandled clock");
 	}
