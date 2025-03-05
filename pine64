@@ -54,6 +54,7 @@ misc
 	sdmmc sdhc
 	lcd
 	display
+	ethereg25
 
 port
 	int cpuserver = 0;

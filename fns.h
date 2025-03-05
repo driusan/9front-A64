@@ -216,3 +216,6 @@ extern void lcdinit(void);
 /* backlight */
 extern void backlightinit(void);
 extern void backlight(int);
+
+/* modem */
+extern void modeminit(void);

@@ -20,9 +20,7 @@
 
 #define PIO_CFG_MASK(n) ~(7<<n)
 
-#define PIO_PH_CFG01 0x100
 #define PIO_PD_CFG02 0x74
-#define	PIO_PH_DATA 0x10c
 #define PIO_PD_DATA 0x7c
 
 #define	RPIO_CFG10	0x04	/* Port L Configure Register 1 */
