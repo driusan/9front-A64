@@ -66,7 +66,8 @@
 // #define	IOSIZE	0x303C00
 
 #define	PHYSDRAM	0x40000000
-#define	DRAMSIZE	0x80000000
+// #define	DRAMSIZE	(2*GiB)
+#define	DRAMSIZE	(2*GiB + 500*MiB)
 
 #define	KZERO		(0xFFFFFFFF80000000ULL)	/* 0x00000000 - kernel address space */
 

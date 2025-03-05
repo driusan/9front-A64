@@ -69,9 +69,6 @@ mmu0init(uintptr *l1)
 
 
 
-
-
-
 	/* VDRAM */
 	attr = PTEWRITE | PTEAF | PTEKERNEL | PTEUXN | PTESH(SHARE_INNER);
 	pe = -KZERO;
@@ -126,7 +123,6 @@ mmu0clear(uintptr *l1)
 void
 meminit(void)
 {
-	uintptr va, pa;
 	int i;
 
 	conf.mem[0].base = PGROUND((uintptr)end - KZERO);
@@ -134,44 +130,10 @@ meminit(void)
 	conf.mem[1].base = UCRAMBASE + UCRAMSIZE;
 	conf.mem[1].limit = PHYSDRAM+DRAMSIZE;
 
-	/*
-	 * now we know the real memory regions, unmap
-	 * everything above INITMAP and map again with
-	 * the proper sizes.
-	 */
-	coherence();
-	for(va = INITMAP+KZERO; va != 0; va += PGLSZ(1)){
-		pa = va-KZERO;
-		((uintptr*)L1)[PTL1X(pa, 1)] = 0;
-		((uintptr*)L1)[PTL1X(va, 1)] = 0;
-	}
-	flushtlb();
-
-	pa = PGROUND((uintptr)end)-KZERO;
 	for(i=0; i<nelem(conf.mem); i++){
-		if(conf.mem[i].limit >= KMAPEND-KMAP)
-			conf.mem[i].limit = KMAPEND-KMAP;
-
-		if(conf.mem[i].limit <= conf.mem[i].base){
-			conf.mem[i].limit = conf.mem[i].base = 0;
-			continue;
-		}
-
-		if(conf.mem[i].base < PHYSDRAM + DRAMSIZE
-		&& conf.mem[i].limit > PHYSDRAM + DRAMSIZE)
-			conf.mem[i].limit = PHYSDRAM + DRAMSIZE;
-
-		/* take kernel out of allocatable space */
-		if(pa > conf.mem[i].base && pa < conf.mem[i].limit)
-			conf.mem[i].base = pa;
-
 		kmapram(conf.mem[i].base, conf.mem[i].limit);
-	}
-	flushtlb();
-
-	/* rampage() is now done, count up the pages for each bank */
-	for(i=0; i<nelem(conf.mem); i++)
 		conf.mem[i].npage = (conf.mem[i].limit - conf.mem[i].base)/BY2PG;
+	}
 
 
 }
