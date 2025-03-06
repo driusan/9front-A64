@@ -219,3 +219,8 @@ extern void backlight(int);
 
 /* modem */
 extern void modeminit(void);
+
+/* pio */
+extern int piocfg(char *name, int val);
+extern int pioset(char *name, int on);
+extern int pioget(char *name);

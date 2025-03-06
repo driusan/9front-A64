@@ -46,6 +46,7 @@ ip
 
 misc
 	rsb
+	pio
 	uarti8250
 	keyadc
 	ccu

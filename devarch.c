@@ -517,9 +517,10 @@ archinit(void)
 		Moving rsb to the conf file causes things to freeze on boot
 		(presumably because of some other timing/order dependency
 	*/
+	// modeminit();
 	lcdinit();
 	deinit();
-	modeminit();
+
 	addarchfile("keyadc", 0444, keyadcread, nil);
 	addarchfile("keyadc_event", 0444, keyadceventread, nil);
 	addarchfile("pllgates", 0444, pllgatesread, nil);

@@ -12,18 +12,11 @@
 #include "dat.h"
 #include "fns.h"
 #include "io.h"
+#include "pio.h"
+
 
 #define DEBUG if(0)
 
-#define R_PWM_CTRL_REG 0x0
-#define	R_PWM_CH0_PERIOD 0x04
-
-#define PIO_CFG_MASK(n) ~(7<<n)
-
-#define PIO_PD_CFG02 0x74
-#define PIO_PD_DATA 0x7c
-
-#define	RPIO_CFG10	0x04	/* Port L Configure Register 1 */
 #define PLL_VIDEO00_CTRL_REG 0x10
 #define TCON0_CLK_REG 0x118
 #define BUS_CLK_GATING_REG1 0x64
@@ -100,50 +93,6 @@ ccurd(int offset)
 {
 	coherence();
 	return *IO(u32int, (CCUBASE + offset));
-}
-
-static u32int
-piord(int offset)
-{
-	coherence();
-	return *IO(u32int, (PIO + offset));
-}
-static void
-piowr(int offset, u32int val)
-{
-	// iprint("piowr: %ux = %ux\n", PIO + offset, val);
-	*IO(u32int, (PIO + offset)) = val;
-	coherence();
-}
-
-static u32int
-rpiord(int offset)
-{
-	coherence();
-	return *IO(u32int, (R_PIO + offset));
-}
-static void
-rpiowr(int offset, u32int val)
-{
-	// iprint("rpio: %ux = %ux\n", R_PIO + offset, val);
-	*IO(u32int, (R_PIO + offset)) = val;
-	coherence();
-}
-
-static u32int
-pwmrd(int offset)
-{
-	coherence();
-	return *IO(u32int, (PWM + offset));
-}
-
-
-static void
-pwmwr(int offset, u32int val)
-{
-	// iprint("pwm: %ux = %ux\n", PWM + offset, val);
-	*IO(u32int, (PWM + offset)) = val;
-	coherence();
 }
 
 static u32int
@@ -379,10 +328,8 @@ static void
 lcdreset(void)
 {
 	// configure PD23 for output
-	piowr(PIO_PD_CFG02, piord(PIO_PD_CFG02) & PIO_CFG_MASK(28) | (1<<28));
-
-	// set PD23 to high
-	piowr(PIO_PD_DATA, piord(PIO_PD_DATA) | (1<<23));
+	piocfg("PD23", PioOutput);
+	pioset("PD23", 1);
 	delay(15);
 }
 
@@ -899,8 +846,8 @@ static void
 pmicsetup(void)
 {
 	// configure PD23 for output, set to low. (Pin is active low)
-	piowr(PIO_PD_CFG02, piord(PIO_PD_CFG02) & PIO_CFG_MASK(28) | (1<<28));
-	piowr(PIO_PD_DATA, piord(PIO_PD_DATA) & ~(1<<23));
+	piocfg("PD23", PioOutput);
+	pioset("PD23", 0);
 	delay(15);
 	setpmicvolt("DLDO1", 3300); // camera / usb hsic / i2c sensors
 	setpmicstate("DLDO1", 1);

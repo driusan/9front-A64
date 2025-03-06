@@ -10,21 +10,9 @@
 #include "io.h"
 #include "../port/i2c.h"
 #include "ccu.h"
+#include "pio.h"
 
 #define DEBUG if(0)
-
-static u32int
-piord(int offset)
-{
-	coherence();
-	return *IO(u32int, (PIO + offset));
-}
-static void
-piowr(int offset, u32int val)
-{
-	*IO(u32int, (PIO + offset)) = val;
-	coherence();
-}
 
 static enum {
 	STATE_STARTING,
@@ -241,28 +229,27 @@ pincfg(void)
 	A64 user manual, page 401
 	*/
 	/* TWI0 */
-	piowr(PIO_CFG0_REG, piord(PIO_CFG0_REG) 
-		& ~(0x7 | 0x7<<4) | 2 | (2<<4)
-	);
+	piocfg("PH0", 2 /* TWI0_SCK */);
+	piocfg("PH1", 2 /* TWI0_SDA */);
+
 	/* TWI1 */
-	piowr(PIO_CFG0_REG, piord(PIO_CFG0_REG) 
-		& ~(0x7<<8 | 0x7<<12) | 2<<8 | (2<<12)
-	);
+	piocfg("PH2", 2 /* TWI1_SCK */);
+	piocfg("PH3", 2 /* TWI1_SDA */);
+
 	/* TWI2 */
-	piowr(PE_CFG1_REG, piord(PE_CFG1_REG) 
-		& ~(0x7<<8 | 0x7<<12) | 2<<8 | (2<<12)
-	);
+	piocfg("PE14", 3 /* TWI2_SCK */);
+	piocfg("PE15", 3 /* TWI2_SDA */);
 
 #define PH_CFG0_REG 0xfc
 #define PH_CFG1_REG 0x100
 #define PH_DAT_REG 0x10c
 	/* XXX This is for the touch panel, not TWI. Move it. */
+	piocfg("PH4", 6 /* PH_EINT5 */);
+	piocfg("PH11", PioOutput);
 
-	piowr(PH_CFG0_REG, piord(PH_CFG0_REG) & ~(0x7<<16)| (6<<16)); // ph4, interrupt
-	piowr(PH_CFG1_REG, piord(PH_CFG1_REG) & ~(0x7<<12)| (1<<12));// ph11, reset, output
-	piowr(PH_DAT_REG, piord(PH_DAT_REG) | (1<<11));
+	pioset("PH11", 1);
 	delay(100);
-	piowr(PH_DAT_REG, piord(PH_DAT_REG) | (0<<11));
+	// pioset("PH11", 0);
 	delay(100);
 }
 

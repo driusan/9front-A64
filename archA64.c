@@ -9,15 +9,23 @@
 #include "fns.h"
 #include "../port/error.h"
 #include "io.h"
+ 
+static void
+piowr(int offset, u32int val)
+{
+	*IO(u32int, (PIO + offset)) = val;
+}
 
+
+static u32int
+piord(int offset)
+{
+	return *IO(u32int, (PIO + offset));
+}
 
 /* R_PIO regs */
-#define	RPIO_CFG00	0x00	/* Port L Configure Register 0 */
-	#define	S_RSB_SCK	0x2
-	#define	S_RSB_SDA	0x20
-#define	RPIO_CFG10	0x04	/* Port L Configure Register 1 */
-#define	RPIO_CFG20	0x08	/* Port L Configure Register 2 */
-#define	RPIO_CFG30	0x0C	/* Port L Configure Register 3 */
+#define	S_RSB_SCK	0x2
+#define	S_RSB_SDA	0x2
 #define	RPIO_DAT0	0x10	/* Port L Data Register */
 #define	RPIO_DRV00	0x14	/* Port L Multi-Driving Register 0 */
 
@@ -60,27 +68,10 @@ prcmrd(int offset)
 }
 
 
-static void
-piowr(int offset, u32int val)
-{
-	*IO(u32int, (PIO + offset)) = val;
-}
-
-
-static u32int
-piord(int offset)
-{
-	return *IO(u32int, (PIO + offset));
-}
-
-
 /*
  *	This is needed to make sure RSB and access to the PMIC
  *	works on the Pine64 Pinephone
  */
-
-
-
 void
 arch_rsbsetup(void)
 {
@@ -88,7 +79,8 @@ arch_rsbsetup(void)
 	prcmwr(APBS_CLK_GATING_REG, prcmrd(APBS_CLK_GATING_REG) | R_PIO_GATING);
 
 	/* sets PL0 and PL1 to use RSB */
-	piowr(RPIO_CFG00, piord(RPIO_CFG00) & ~0xff | (S_RSB_SCK | S_RSB_SDA));
+	piocfg("PL0", S_RSB_SCK);
+	piocfg("PL1", S_RSB_SDA);
 	/* sets PL0 and PL1 to "Level 2" */
 	piowr(RPIO_DRV00, piord(RPIO_DRV00) & ~0x0f | 0xa);
 	/* sets PL0 and PL1 to pull-up */
