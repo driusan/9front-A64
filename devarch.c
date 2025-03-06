@@ -505,6 +505,44 @@ brightnesswrite(Chan*, void *a, long z, vlong offset)
 	return z;
 }
 
+static long
+batteryread(Chan*, void *a, long n, vlong offset)
+ {
+ 	char *p, *name;;
+	int i, l;
+	int pct = axpgetchargepct();
+ 	int ratedcharge = axpgetmaxcharge();
+	int currentcharge = axpgetcurrentcharge();
+	char* lastcharge = "unknown";
+	char *warning = "unknown";
+	char *lowcap = "unknown";
+	int volt = axpgetbatteryvoltage();
+	char *designvolt = "unknown";
+	char *timeleft = "unknown";
+	char *state = "unknown";
+ 	p = smalloc(READSTR);
+ 
+
+ 	l = 0;
+ 	qlock(&plock);
+ 
+	l += snprint(p+l, READSTR-l, "%d mA %d %s %d %s %s mV %d %s %s %s\n",	
+		pct,
+		currentcharge,
+		lastcharge,
+		ratedcharge,
+		warning,
+		lowcap,
+		volt,
+		designvolt,
+		timeleft,
+		state
+	);
+ 	n = readstr(offset, a, n, p);
+ 	free(p);
+ 	qunlock(&plock);
+ 	return n;
+ }
 void
 archinit(void)
 {
@@ -533,5 +571,6 @@ archinit(void)
 	addarchfile("pmic", 0664, pmicread, pmicwrite);
 	// addarchfile("led", 0664, ledread, ledwrite);
 	addarchfile("brightness", 0644, brightnessread, brightnesswrite);
+	addarchfile("battery", 0444, batteryread, nil);
 }
 

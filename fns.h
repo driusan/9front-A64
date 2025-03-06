@@ -203,7 +203,10 @@ extern int getpmicstate(int);
 extern int getpmicvolt(int);
 extern int setpmicstate(char*, int);
 extern int setpmicvolt(char*, int);
-
+extern int axpgetchargepct(void);
+extern int axpgetcurrentcharge(void);
+extern int axpgetbatteryvoltage(void);
+extern int axpgetmaxcharge(void);
 /* archA64 */
 extern void arch_rsbsetup(void);
 

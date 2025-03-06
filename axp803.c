@@ -155,7 +155,6 @@ setpmicstate(char *name, int state)
  *	twice as many mV.
  *	ex. 10mV steps till 1200mV, and 20mv steps above
  */
-
 int
 getpmicvolt(int rail)
 {
@@ -235,4 +234,53 @@ getpmicname(int rail)
 }
 
 
+int
+axpgetchargepct(void)
+{
+	u8int buf = pwrrd(0xb9);
 
+	if(!(buf & (1<<7)))
+		return -1;
+	return buf & 0x7f;
+}
+
+
+
+int
+axpgetmaxcharge(void)
+{
+	int val;
+	u8int buf = pwrrd(0xe0);
+
+	if(!(buf & (1<<7)))
+		return -1;
+
+	val = (buf & 0x7f)<<8;
+	val |= pwrrd(0xe1);
+	return (int )((float )val * 1.456);
+}
+
+
+int
+axpgetcurrentcharge(void)
+{
+	int val;
+	u8int buf = pwrrd(0xe2);
+
+	if(!(buf & (1<<7)))
+		return -1;
+
+	val = (buf & 0x7f)<<8;
+	val |= pwrrd(0xe3);
+	return (int )((float )val * 1.456);
+}
+
+
+int
+axpgetbatteryvoltage(void)
+{
+	int val = pwrrd(0xa1) & 0xf;
+	val |= (u8int) pwrrd(0xe3) << 4;
+	/* FIXME: This needs to be converted to a voltage. */
+	return val;
+}
