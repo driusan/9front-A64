@@ -164,9 +164,9 @@ keyadceventread(Chan*, void *a, long n, vlong offset)
 	int l;
 	char *s = getkeyadc_event();
 	uint v = getkeyadc();
-	snprint(str, sizeof str, "%s %ud\n", s, v);
-	l = readstr(offset, a, n, str);
-	return n;
+	l = snprint(str, sizeof str, "%s %ud\n", s, v);
+	l = readstr(0, a, l > n ? n : l, str);
+	return l;
 }
 
 static long

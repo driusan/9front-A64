@@ -41,6 +41,11 @@
 #define ADC_KEYDOWN_PENDING(x)    ((x) << 1)
 #define ADC_DATA_PENDING(x)       ((x) << 0)
 
+typedef struct Ctlr Ctlr;
+struct Ctlr{
+	QLock;
+	Rendez;
+};
 enum {
 	Eunknown,
 	Ekeyup,
@@ -60,19 +65,15 @@ char *enames[] = {
 };
 
 
+static Ctlr ctlr;
 /* to get voltage: keyadc/KEYADC_MAX * vref */
 uint keyadc;
 uint keyadc_event;
-int interrupt;
 uint vref;
 
 uint
 getkeyadc()
 {
-	u32int *data = (u32int*)KEYADC_DATA;
-	keyadc = *data & KEYADC_MAX;
-	
-	keyadc = keyadc / KEYADC_MAX * vref;
 	return keyadc;
 }
 
@@ -80,64 +81,72 @@ char*
 getkeyadc_event()
 {
 	/* wait for event */
-	while (!interrupt)
-		;
+	sleep(&ctlr, return0, nil);
 	char *s = enames[keyadc_event];
-	interrupt = 0;
 	return s;
-}
-
-static uint
-ints2event(u32int *ints)
-{
-	if (*ints & ADC_KEYUP_PENDING(1))
-		return Ekeyup;
-	if (*ints & ADC_ALRDY_HOLD_PENDING(1))
-		return Ealreadyhold;
-	if (*ints & ADC_HOLDKEY_PENDING(1))
-		return Eholdkey;
-	if (*ints & ADC_KEYDOWN_PENDING(1))
-		return Ekeydown;
-	if (*ints & ADC_DATA_PENDING(1))
-		return Edata;
-	return Eunknown;
 }
 
 
 static void
-localkeyadcintr(Ureg *ureg, void*)
+localkeyadcintr(Ureg*, void* a)
 {
+	Ctlr *ctlr = a;
 	u32int *ints = (u32int*)KEYADC_INTS;
 	u32int *data = (u32int*)KEYADC_DATA;
-	keyadc = *data & KEYADC_MAX;
-	
-	keyadc_event = ints2event(ints);
-	
-	print("keyadc interrupt: %ud\n", keyadc);
-	
-	*ints = *ints;
-	interrupt = 1;
+	qlock(ctlr);
+	if (*ints & ADC_DATA_PENDING(1)){
+		keyadc = *data & KEYADC_MAX;
+		*ints = ADC_DATA_PENDING(1);
+	}
+
+	if (*ints & ADC_KEYUP_PENDING(1)){
+		keyadc_event = Ekeyup;
+		*ints = ADC_KEYUP_PENDING(1);
+		wakeup(ctlr);
+	}
+	if (*ints & ADC_ALRDY_HOLD_PENDING(1)){
+		keyadc_event = Ealreadyhold;
+		*ints = ADC_ALRDY_HOLD_PENDING(1);
+		wakeup(ctlr);
+	}
+
+	if (*ints & ADC_HOLDKEY_PENDING(1)){
+		keyadc_event = Eholdkey;
+		*ints = ADC_HOLDKEY_PENDING(1);
+		wakeup(ctlr);
+	}
+	if (*ints & ADC_KEYDOWN_PENDING(1)){
+		keyadc_event = Ekeydown;
+		*ints = ADC_KEYDOWN_PENDING(1);
+		wakeup(ctlr);
+	}
+
+	if(*ints != 0){
+		print("unhandled keyadc interrupt: %ud\n", *ints);
+		*ints = *ints;	
+	}
+	qunlock(ctlr);
+
 }
 
 void
 keyadcinit()
 {
+	u32int *ints = (u32int*)KEYADC_INTS;
 	vref = 3000 * 2 / 3; // assume 3V
 	
 	u32int *reg = (u32int*)KEYADC_CTRL;
 	*reg = FIRST_CONVERT_DLY(2)
 	     | LEVELA_B_CNT(1)
-	 //    | KEYADC_HOLD_EN(1)
+	     | KEYADC_HOLD_EN(1)
 	     | KEYADC_SAMPLE_RATE(0)
 	     | KEYADC_EN(1) | KEY_MODE_SELECT(2);
 	
 	reg = (u32int*)KEYADC_INTC;
 	*reg = ADC_KEYUP_IRQ_EN(1) | ADC_KEYDOWN_IRQ_EN(1) |
-		ADC_ALRDY_HOLD_IRQ_EN(1) | ADC_HOLD_IRQ_EN(1);
-	
-	localkeyadcintr(nil, nil);
+		ADC_ALRDY_HOLD_IRQ_EN(1) | ADC_HOLD_IRQ_EN(1) |
+		ADC_DATA_IRQ_EN(1);
 
-	intrenable(IRQkeyadc, localkeyadcintr, nil, BUSUNKNOWN, "keyadc");
+	*ints = *ints;
+	intrenable(IRQkeyadc, localkeyadcintr, &ctlr, BUSUNKNOWN, "keyadc");
 }
-
-
