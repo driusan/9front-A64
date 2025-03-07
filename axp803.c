@@ -233,9 +233,33 @@ getpmicname(int rail)
 	return pr->name;
 }
 
+int
+pmic_batterypresent(void)
+{
+	u8int reg = pwrrd(PWR_MODE);
+	if ((reg & (1<<4)) == 0) {
+		return -1; /* invalid flag is set */
+	}
+	return reg & (1<<5);
+}
 
 int
-axpgetchargepct(void)
+pmic_batterycharging(void)
+{
+	u8int reg = pwrrd(PWR_MODE);
+	if ((reg & (1<<4)) == 0) {
+		return -1; /* invalid flag is set for battery presence */
+	}
+	if ((reg & (1<<5)) == 0){
+		return -1; /* no battery present */
+	}
+	return (reg & (1<<6)) != 0;
+	
+}
+
+
+int
+pmic_chargepct(void)
 {
 	u8int buf = pwrrd(0xb9);
 

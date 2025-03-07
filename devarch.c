@@ -510,16 +510,34 @@ batteryread(Chan*, void *a, long n, vlong offset)
  {
  	char *p, *name;;
 	int i, l;
-	int pct = axpgetchargepct();
- 	int ratedcharge = axpgetmaxcharge();
-	int currentcharge = axpgetcurrentcharge();
+	int pct;
+ 	int ratedcharge;
+	int currentcharge;
 	char* lastcharge = "unknown";
 	char *warning = "unknown";
 	char *lowcap = "unknown";
-	int volt = axpgetbatteryvoltage();
+	int volt;
 	char *designvolt = "unknown";
 	char *timeleft = "unknown";
 	char *state = "unknown";
+	if(pmic_batterypresent() <= 0) {
+		return readstr(offset, a, n, ""); 
+	}
+	switch(pmic_batterycharging())
+	{
+	case 0:
+		state = "discharging";
+		break;
+	case 1:
+		state = "charging";
+		break;
+	default:
+		state = "unknown";
+		break;
+	}
+	volt = axpgetbatteryvoltage();
+	currentcharge = pmic_chargepct();
+	ratedcharge = axpgetmaxcharge();
  	p = smalloc(READSTR);
  
 
@@ -527,7 +545,7 @@ batteryread(Chan*, void *a, long n, vlong offset)
  	qlock(&plock);
  
 	l += snprint(p+l, READSTR-l, "%d mA %d %s %d %s %s mV %d %s %s %s\n",	
-		pct,
+		pmic_chargepct(),
 		currentcharge,
 		lastcharge,
 		ratedcharge,
