@@ -30,8 +30,22 @@ rpwmwr(int offset, u32int val)
 int brightness = 100;
 
 void backlight(int pct){
+	if(pct == 0) {
+		pioset("PH10", 0);
+		setpmicstate("DLDO1", 0); /* video/sensors/usb hsic*/
+		setpmicstate("DLDO2", 0); /* mipi */
+		setpmicstate("DLDO3", 0); /* avdd-csi? camera? */
+		setpmicstate("DLDO4", 0); /* wifi */
+	} else {
+		pioset("PH10", 1);
+		/* re-enable sensors for touchscreen and mipi for video, we don't
+			have support for anything else yet */
+		setpmicstate("DLDO1", 1);
+		setpmicstate("DLDO2", 1);
+	}
 	rpwmwr(R_PWM_CH0_PERIOD,  (0x4af << 16) | ((0x4af*pct/100)&0xffff));
 	brightness = pct;
+	
 };
 
 /**
