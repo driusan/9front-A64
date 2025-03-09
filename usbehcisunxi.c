@@ -17,17 +17,51 @@
 #include	"usbehci.h"
 
 #include "ccu.h"
+#include "pio.h"
 
-static Ctlr ctlrs[3] = {
+/* undocumented usbphy registers */
+enum {
+	PHYCSR = 0x0,
+	PHYCTL = 0x10,
+	OTGPHYCFG = 0x20,
+};
+
+enum {
+	PmuIRQ = 0x0, /* documented on page 618 of A64 user manual */
+	PmuUnkH3 = 0x10, /* undocumented */
+};
+static Ctlr ctlrs[2] = {
 	{
-		.base = VIRTIO + SYSCTL + USB0,
+		.base = PHYSDEV + USB0,
 		.irq = IRQotgehci,
 	},
 	{
-		.base = VIRTIO + SYSCTL + USB1,
+		.base = PHYSDEV + USB1,
 		.irq = IRQusbehci,
 	},
 };
+
+static void
+usbphywr(u32int reg, u32int val)
+{
+	*IO(u32int, 0x1c19400 + reg) = val;
+}
+
+static u32int
+usbphyrd(int reg) {
+	return *IO(u32int, 0x1c19400 + reg);
+}
+
+static u32int
+pmurd(Ctlr *ctlr, int reg)
+{
+	return *IO(u32int, ctlr->base + 0x800 + reg);
+}
+static void
+pmuwr(Ctlr *ctlr, int reg, u32int val)
+{
+	*IO(u32int, ctlr->base + 0x800 + reg) = val;
+}
 
 static void
 ehcireset(Ctlr *ctlr)
@@ -82,37 +116,32 @@ dmafree(void *data)
 	free(data);
 }
 
-static int (*ehciportstatus)(Hci*,int);
-
-static int
-portstatus(Hci *hp, int port)
+static void
+otghostmode(void)
 {
-	Ctlr *ctlr;
-	Eopio *opio;
-	int r, sts;
+	u32int phy_csr = usbphyrd(PHYCSR);
 
-	ctlr = hp->aux;
-	opio = ctlr->opio;
-	r = (*ehciportstatus)(hp, port);
-	if(r & HPpresent){
-		sts = opio->portsc[port-1];
-		r &= ~(HPhigh|HPslow);
-		if(sts & (1<<9))
-			r |= HPhigh;
-		else if(sts & 1<<26)
-			r |= HPslow;
-	}
-	return r;
+	/* FIXME: Use proper constants. */
+	phy_csr &= ~(1<<6|1<<5|1<<4);
+	phy_csr |= 1<<17 | 1<<16;
+	phy_csr &= ~(0x3<<12);
+	phy_csr |= 3<<12; // or 2?
+	phy_csr &= ~(0x3<<14);
+	phy_csr |= 2<<14;
+
+
+	u32int otg_phy_cfg = usbphyrd(OTGPHYCFG);
+	otg_phy_cfg &= ~1;
+	usbphywr(OTGPHYCFG, otg_phy_cfg);
+	usbphywr(PHYCSR, phy_csr);
+
 }
-
 static int
 reset(Hci *hp)
 {
 	Ctlr *ctlr;
-	iprint("hp port: %ulld\n", hp->port);
 	for(ctlr = ctlrs; ctlr->base != 0; ctlr++)
 		if(!ctlr->active && (hp->port == 0 || hp->port == ctlr->base)){
-			iprint("hp port: %ulld ctrl base: %ulld\n", hp->port, ctlr->base);
 			ctlr->active = 1;
 			break;
 		}
@@ -123,8 +152,8 @@ reset(Hci *hp)
 	hp->irq = ctlr->irq;
 	hp->aux = ctlr;
 
-	ctlr->opio =  (Eopio *)(ctlr->base + 0x10);
-	ctlr->capio = (void *)ctlr->base;
+	ctlr->opio =  (Eopio *)(VIRTIO + ctlr->base + 0x10);
+	ctlr->capio = (void *)(VIRTIO + ctlr->base);
 	hp->nports = 1;
 
 	ctlr->tdalloc = tdalloc;
@@ -136,31 +165,6 @@ reset(Hci *hp)
 	ehcimeminit(ctlr);
 	ehcilinkage(hp);
 
-	ehciportstatus = hp->portstatus;
-	hp->portstatus = portstatus;
-
-	intrenable(hp->irq, hp->interrupt, hp, BUSUNKNOWN, hp->type);
-	return 0;
-
-	// ctlr->r = vmap(ctlr->base, 0x1F0);
-	// ctlr->opio = (Eopio *) ((uchar *) ctlr->r + 0x140);
-	// ctlr->capio = (void *) ctlr->base;
-	hp->nports = 1;	
-
-	ctlr->tdalloc = tdalloc;
-	ctlr->dmaalloc = dmaalloc;
-	ctlr->dmafree = dmafree;
-
-	ehcireset(ctlr);
-	// ctlr->r[USBMODE] |= USBHOST;
-	// ctlr->r[ULPI] = 1<<30 | 1<<29 | 0x0B << 16 | 3<<5;
-	ehcimeminit(ctlr);
-	ehcilinkage(hp);
-
-	/* hook portstatus */
-	ehciportstatus = hp->portstatus;
-	hp->portstatus = portstatus;
-
 	intrenable(hp->irq, hp->interrupt, hp, BUSUNKNOWN, hp->type);
 	return 0;
 }
@@ -168,6 +172,8 @@ reset(Hci *hp)
 static void
 usbphyinit(void)
 {
+
+	clkenable(USBPHY_CFG_REG);
 	/* XXX: Investigate if OHCI gate is needed for EHCI */
 	if(openthegate("USBOHCI0") == -1){
 		panic("Could not open USBEHCI0 gate");
@@ -183,8 +189,16 @@ usbphyinit(void)
 	if(openthegate("USB-OTG-EHCI") == -1) {
 		panic("Could not open USB-OTG-EHCI");
 	}
-	/* we do not open the device gate, only support host mode */
-	clkenable(USBPHY_CFG_REG);
+	/* do we need this? */
+	if(openthegate("USB-OTG-Device") == -1) {
+		panic("Could not open USB-OTG-Device");
+	}
+
+	pmuwr(&ctlrs[0], PmuUnkH3,  pmurd(&ctlrs[0], PmuUnkH3) & ~(0x2));
+	pmuwr(&ctlrs[0], PmuIRQ,  1 | (1<<8) | (1<<9) | (1<<10));
+	pmuwr(&ctlrs[1], PmuUnkH3,  pmurd(&ctlrs[1], PmuUnkH3) & ~(0x2));
+	pmuwr(&ctlrs[1], PmuIRQ,  1 | (1<<8) | (1<<9) | (1<<10));
+	otghostmode();
 }
 
 void

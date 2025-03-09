@@ -53,10 +53,7 @@ static void
 poweron(void)
 {
 	int timeout = 30;
-/* 	setpmicvolt("DCDC1", 3300);
-	setpmicstate("DCDC1", 1);
-	delay(10); */
-	iprint("PH: %x\n", pioget("PH9"));
+
 	/* PL7 - Baseband power */
 	pioset("PL7", 1);
 	/* PC4 - Reset modem */
@@ -77,9 +74,8 @@ poweron(void)
 	while(pioget("PH9") != 0 && timeout--)
 	{
 		delay(1000);
-		iprint("Status still set.. %x\n", pioget("PH9"));
+		iprint("Waiting for modem to initialize..\n");
 	}
-	iprint("PH status: %x\n", pioget("PH9"));
 	if(timeout <= 0) {
 		iprint("Modem init timeout\n");
 	}
@@ -91,14 +87,11 @@ poweron(void)
 void
 modeminit(void)
 {
-	iprint("Modem init\n");
 	pincfg();
 	poweron();
 }
 void
 ethereg25link(void)
 {
-//	modeminit();
-	iprint("Ether link\n");
 	/* addethercard("ethereg25", pnp);*/
 }
