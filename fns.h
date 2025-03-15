@@ -176,6 +176,7 @@ extern u32int getcpuclk_p(void);
 extern int setcpuclk(uint);
 extern int setcpuclk_n(u32int);
 extern int openthegate(char*);
+extern int closethegate(char*);
 extern ulong getclkrate(int clkid);
 extern void setclkrate(int clkid, ulong hz);
 extern void clkenable(int clkid);

@@ -13,23 +13,11 @@
 #include "fns.h"
 #include "io.h"
 #include "pio.h"
-
+#include "lcd.h"
+#include "ccu.h"
 
 #define DEBUG if(0)
 
-#define PLL_VIDEO00_CTRL_REG 0x10
-#define TCON0_CLK_REG 0x118
-#define BUS_CLK_GATING_REG1 0x64
-#define PLL_MIPI_CTRL_REG 0x40
-#define BUS_SOFT_RST_REG1 0x2c4
-#define TCON_GCTL_REG 0x00
-#define TCON_GINT0_REG 0x04
-#define TCON_GINT1_REG 0x08
-#define TCON0_IO_TRI_REG 0x8c
-#define TCON1_IO_TRI_REG 0xf4
-#define TCON0_DCLK_REG 0x44
-#define BUS_CLK_GATING_REG0 0x60
-#define BUS_SOFT_RST_REG0 0x2c0
 #define DSI_CTL_REG 0x00
 #define DSI_BASIC_CTL0_REG 0x10
 #define DSI_START_TRANS_REG 0x60
@@ -38,7 +26,6 @@
 #define DSI_INST_JUMP_CFG_REG(n) (0x04c + (n*0x04))
 #define DSI_DEBUG_DATA_REG 0x2f8
 #define DSI_BASIC_CTL1_REG 0x14
-#define MIPI_DSI_CLK_REG 0x168
 #define DSI_TCON0_DRQ_REG 0x7c
 #define DSI_INST_LOOP_SEL_REG 0x40
 #define DSI_INST_LOOP_NUM_REG(n) (0x044 + (n*0x10))
@@ -63,37 +50,59 @@
 #define DSI_BLK_HBLK1_REG 0xe4
 #define DSI_BLK_VBLK0_REG 0xe8
 #define DSI_BLK_VBLK1_REG 0xec
-#define DPHY_TX_CTL_REG 0x04
-#define DPHY_TX_TIME0_REG 0x10
-#define DPHY_TX_TIME1_REG 0x14
-#define DPHY_TX_TIME2_REG 0x18
-#define DPHY_TX_TIME3_REG 0x1c
-#define DPHY_TX_TIME4_REG 0x20
-#define DPHY_GCTL_REG 0x00
-#define DPHY_ANA0_REG 0x4c
-#define DPHY_ANA1_REG 0x50
-#define DPHY_ANA2_REG 0x54
-#define DPHY_ANA3_REG 0x58
-#define DPHY_ANA4_REG 0x5c
-#define MIPI_DSI_DCS_SHORT_WRITE 0x05
-#define MIPI_DSI_DCS_SHORT_WRITE_PARAM 0x15
-#define MIPI_DSI_DCS_LONG_WRITE 0x39
 #define DSI_CMD_CTRL_REG 0x200
 #define DSI_CMD_TX_REGISTER 0x300
 
-static void
-ccuwr(int offset, u32int val)
-{
-	// iprint("ccwr: %ux = %ux\n", CCUBASE + offset, val);
-	*IO(u32int, (CCUBASE + offset)) = val;
-	coherence();
-}
-static u32int
-ccurd(int offset)
-{
-	coherence();
-	return *IO(u32int, (CCUBASE + offset));
-}
+#define MIPI_DSI_DCS_SHORT_WRITE 0x05
+#define MIPI_DSI_DCS_SHORT_WRITE_PARAM 0x15
+#define MIPI_DSI_DCS_LONG_WRITE 0x39
+enum {
+	TCON_GCTL = 0x00,
+	TCON_GINT0 = 0x04,
+	TCON_GINT1 = 0x08,
+ 
+	TCON0_CTL = 0x40,
+		TCON0_CTL_ENABLE = 1<<31,
+		TCON0_8080_IF = 1<<24,
+	TCON0_DCLK = 0x44,
+		DCLK_EN_SHIFT = 28,
+		DCLK_DIV_SHIFT = 0,
+	TCON0_BASIC = 0x48,
+	TCON0_CPU_IF = 0x60,
+		CPU_IF_DSI = 1<<28,
+		CPU_IF_FLUSH = 1<<16,
+		CPU_IF_FIFO_DIS = 1<<2,
+		CPU_IF_EN = 1<<0,
+	TCON0_IO_TRI = 0x8c,
+	TCON1_IO_TRI = 0xf4,
+	TCON0_ECC_FIFO = 0xf8,
+	TCON0_CPU_TRI0 = 0x160,
+		CPU_TRI0_BLOCK_SPACE = 47<<16,
+	TCON0_CPU_TRI1 = 0x164,
+	TCON0_CPU_TRI2 = 0x168,
+		CPU_TRI2_DELAY = 7106 << 16,
+		CPU_TRI2_TRANS_START = 10 << 0,
+	TCON_SAFE_PERIOD = 0x1f0,
+		SAFE_PERIOD_NUM = 3000<<16,
+		SAFE_PERIOD_MODE = 3<<0,
+};
+
+enum {
+	DPHY_GCTL = 0x00,
+
+	DPHY_TX_CTL = 0x04,
+	DPHY_TX_TIME0 = 0x10,
+	DPHY_TX_TIME1 = 0x14,
+	DPHY_TX_TIME2 = 0x18,
+	DPHY_TX_TIME3 = 0x1c,
+	DPHY_TX_TIME4 = 0x20,
+
+	DPHY_ANA0 = 0x4c,
+	DPHY_ANA1 = 0x50,
+	DPHY_ANA2 = 0x54,
+	DPHY_ANA3 = 0x58,
+	DPHY_ANA4 = 0x5c,
+};
 
 static u32int
 tconrd(int offset)
@@ -145,92 +154,66 @@ dphyrd(int offset)
 static void
 dphywr(int offset, u32int val)
 {
-//	iprint("DPHY: %ux = %ux\n",DPHY + offset, val);
 	*IO(u32int, (DPHY + offset)) = val;
 	coherence();
 }
+
 static void
-tcon0init(void)
+tcon0init(int width, int height)
 {
-	// configure video00
-	ccuwr(PLL_VIDEO00_CTRL_REG, (1<<31)|(1<<24)|(0x62<<8)|7);
-	coherence();
-	// enable ldo1 and ldo2
-	// ccuwr(PLL_MIPI_CTRL_REG, ccurd(PLL_MIPI_CTRL_REG) | (1<<23) | (1<<22));
-	ccuwr(PLL_MIPI_CTRL_REG, (1<<23) | (1<<22));
-	coherence();
-	delay(100);
-	// configure mipi pll
-	ccuwr(PLL_MIPI_CTRL_REG, (1<<31)|(1<<23)|(1<<22)|(7<<8)|(1<<4)|10);
-	coherence();
+	setclkrate(PLL_VIDEO0_CTRL_REG, 297*Mhz);
+	clkenable(PLL_VIDEO0_CTRL_REG);
 
-	// set tcon0 src clk to mipi pll
-	ccuwr(TCON0_CLK_REG, (1<<31) & ~(7<<24));
-	coherence();
-	// enable tcon0 clk
-	ccuwr(BUS_CLK_GATING_REG1, (1<<3));
-	coherence();
-	// deassert tcon0 reset
-	ccuwr(BUS_SOFT_RST_REG1, (1<<3));
-	coherence();
-	// disable tcon0 and interrupts
-	tconwr(TCON_GCTL_REG, tconrd(TCON_GCTL_REG) & ~(1<<31));
-	tconwr(TCON_GINT0_REG, 0);
-	tconwr(TCON_GINT1_REG, 0);
+	setclkrate(PLL_MIPI_CTRL_REG, 648*Mhz);
+	clkenable(PLL_MIPI_CTRL_REG);
 
-	// enable tristate output (XXX: According to the A64 User Manual this is disabling it?)
-	tconwr(TCON0_IO_TRI_REG, 0xffffffff);
-	tconwr(TCON1_IO_TRI_REG, 0xffffffff);
+	clkenable(TCON0_CLK_REG);
+	/* some of these are leftover by the bootloader and interfere with our initialization */
+	if(closethegate("VE") == -1)
+		panic("Could not close VE gate");
+	if(closethegate("DE") == -1) /* will re-open later */
+		panic("Could not close DE gate");
 
-	// set dclk to mipi pll
-	tconwr(TCON0_DCLK_REG, tconrd(TCON0_DCLK_REG) & ~(0xf<<28 | 0x7f) | (8<<28)|6);
-#define TCON0_CTL_REG 0x40
-#define TCON0_BASIC_REG 0x48
-	tconwr(TCON0_CTL_REG, (1<<31)|(1<<24));
-	tconwr(TCON0_BASIC_REG, (719<<16)|1439); /* panel size */
-#define TCON0_ECC_FIFO 0xf8
+	if(openthegate("TCON0") == -1)
+		panic("Could not open TCON0");
+
+	tconwr(TCON_GCTL, tconrd(TCON_GCTL) & ~(1<<31));
+	tconwr(TCON_GINT0, 0);
+	tconwr(TCON_GINT1, 0);
+	tconwr(TCON0_IO_TRI, 0xffffffff);
+	tconwr(TCON1_IO_TRI, 0xffffffff);
+
+	tconwr(TCON0_DCLK, 8<<DCLK_EN_SHIFT | 6<<DCLK_DIV_SHIFT);
+	tconwr(TCON0_CTL, TCON0_CTL_ENABLE|TCON0_8080_IF);
+	tconwr(TCON0_BASIC, ((width-1)<<16)|(height-1));
+	/* undocumented register? */
 	tconwr(TCON0_ECC_FIFO, 8);
-#define TCON0_CPU_IF_REG 0x60
-	tconwr(TCON0_CPU_IF_REG, (1<<28)|(1<<16)|(1<<2)|1);
 
-	// set cpu panel to trigger
-#define TCON0_CPU_TRI0_REG 0x160
-#define TCON0_CPU_TRI1_REG 0x164
-#define TCON0_CPU_TRI2_REG 0x168
-	tconwr(TCON0_CPU_TRI0_REG, (47<<16)|719);
-	tconwr(TCON0_CPU_TRI1_REG, 1439);
-	tconwr(TCON0_CPU_TRI2_REG, (7106<<16)|10);
+	tconwr(TCON0_CPU_IF, CPU_IF_DSI|CPU_IF_FLUSH|CPU_IF_FIFO_DIS|CPU_IF_EN);
+	tconwr(TCON0_CPU_TRI0, CPU_TRI0_BLOCK_SPACE|(width-1));
+	tconwr(TCON0_CPU_TRI1, height-1);
+	tconwr(TCON0_CPU_TRI2, CPU_TRI2_DELAY|CPU_TRI2_TRANS_START);
 
-	// set safe period
-#define TCON_SAFE_PERIOD_REG 0x1f0
-	tconwr(TCON_SAFE_PERIOD_REG, (3000<<16)|3);
+	tconwr(TCON_SAFE_PERIOD, SAFE_PERIOD_NUM|SAFE_PERIOD_MODE);
 
-	// enable output triggers (XXX: This is actually enabling it) 
-	tconwr(TCON0_IO_TRI_REG, 0x7<<29);
+	/* invalid or undocumented value write? */ 
+	tconwr(TCON0_IO_TRI, 0x7<<29);
 
-	// enable tcon0
-	tconwr(TCON_GCTL_REG, tconrd(TCON_GCTL_REG) | (1<<31));
-	
-
+	tconwr(TCON_GCTL, tconrd(TCON_GCTL) | (1<<31));
 }
 
 static void
 dsiinit(void)
 {
-	// enable mipi dsi bus
-	ccuwr(BUS_CLK_GATING_REG0, ccurd(BUS_CLK_GATING_REG0) | (1<<1));
-	ccuwr(BUS_SOFT_RST_REG0, ccurd(BUS_SOFT_RST_REG0) |(1<<1));
+	if(openthegate("MIPIDSI") == -1)
+		panic("Could not open MIPI DSI gate");
 
-	// enable dsi block
-	// dsiwr(DSI_CTL_REG, dsird(DSI_CTL_REG) | 1);
 	dsiwr(DSI_CTL_REG, 1);
-//	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) | (1<<17)|(1<<16)); // crc + ecc
-	dsiwr(DSI_BASIC_CTL0_REG, (1<<17)|(1<<16)); // crc + ecc
+
+	dsiwr(DSI_BASIC_CTL0_REG, (1<<17)|(1<<16)); /* crc + ecc */
 	dsiwr(DSI_START_TRANS_REG, 10);
 	dsiwr(DSI_TRANS_ZERO_REG, 0);
 
-	// set instructions
-	// XXX: Figure out what these mean.
 	dsiwr(DSI_INST_FUNC_REG(0), 0x1f);
 	dsiwr(DSI_INST_FUNC_REG(1), 0x10000001);
 	dsiwr(DSI_INST_FUNC_REG(2), 0x20000010);
@@ -240,29 +223,22 @@ dsiinit(void)
 	dsiwr(DSI_INST_FUNC_REG(6), 0xf);
 	dsiwr(DSI_INST_FUNC_REG(7), 0x5000001f);
 
-	// configure jump instructions (undocumented)
 	dsiwr(DSI_INST_JUMP_CFG_REG(0), 0x560001);
 	dsiwr(DSI_DEBUG_DATA_REG, 0xff);
 
-	// set video delay
 	dsiwr(DSI_BASIC_CTL1_REG, dsird(DSI_BASIC_CTL1_REG) & ~(0x1fff << 4) | 1468<<4 | 1<<2 | 1<<1 | 1);
-
-	// set burst (undocumented)
 
 	dsiwr(DSI_TCON0_DRQ_REG, 0x10000007);
 
-	// set loop instruction (undocumented)
 	dsiwr(DSI_INST_LOOP_SEL_REG, 0x30000002);
 
 	dsiwr(DSI_INST_LOOP_NUM_REG(0), 0x310031);
 	dsiwr(DSI_INST_LOOP_NUM_REG(1), 0x310031);
-	// set pixel format
+
 	dsiwr(DSI_PIXEL_PH_REG, (19<<24) | 2160<<8 | 0x3e);
 	dsiwr(DSI_PIXEL_PF0_REG, 0xffff);
 	dsiwr(DSI_PIXEL_PF1_REG, 0xffffffff);
-	dsiwr(DSI_PIXEL_CTL0_REG, dsird(DSI_PIXEL_CTL0_REG) & ~(1<<4 | 0xf) | (1<<16)|8); // RGB888
-
-	// set sync timings
+	dsiwr(DSI_PIXEL_CTL0_REG, dsird(DSI_PIXEL_CTL0_REG) & ~(1<<4 | 0xf) | (1<<16)|8); /* RGB888 */
 
 	dsiwr(DSI_BASIC_CTL_REG, 0);
 	dsiwr(DSI_SYNC_HSS_REG, 0x12<<24 | 0x21);
@@ -270,11 +246,9 @@ dsiinit(void)
 	dsiwr(DSI_SYNC_VSS_REG, 7<<24 | 1);
 	dsiwr(DSI_SYNC_VSE_REG, 0x14<<24 | 0x11);
 
-	// set basic size (undocumented)
 	dsiwr(DSI_BASIC_SIZE0_REG, 17<<16|10);
 	dsiwr(DSI_BASIC_SIZE1_REG, 1485<<16| 1440);
 
-	// set horizontal blanking
 	dsiwr(DSI_BLK_HSA0_REG, 0x9004a19);
 	dsiwr(DSI_BLK_HSA1_REG, 0x50b4<<16);
 	dsiwr(DSI_BLK_HBP0_REG, 0x35005419);
@@ -284,7 +258,6 @@ dsiinit(void)
 	dsiwr(DSI_BLK_HBLK0_REG, 0xc091a19);
 	dsiwr(DSI_BLK_HBLK1_REG, 0x72bd <<16);
 
-	// set vertical blanking
 	dsiwr(DSI_BLK_VBLK0_REG, 0x1a000019);
 	dsiwr(DSI_BLK_VBLK1_REG, 0xffff<<16);
 }
@@ -292,42 +265,38 @@ dsiinit(void)
 static void
 dphyinit(void)
 {
-	// XXX: Move this to the ccu setclkspeed function. Set the clock to 150Mhz
-	ccuwr(MIPI_DSI_CLK_REG, 1<<15|2<<8|3);
+	setclkrate(MIPI_DSI_CLK_REG, 150*Mhz);
+	clkenable(MIPI_DSI_CLK_REG);
 
-	// Power on DPHY TX (undocumented)
-	dphywr(DPHY_TX_CTL_REG, 0x10000000);
-	dphywr(DPHY_TX_TIME0_REG, 0xa06000e);
-	dphywr(DPHY_TX_TIME1_REG, 0xa033207);
-	dphywr(DPHY_TX_TIME2_REG, 0x1e);
-	dphywr(DPHY_TX_TIME3_REG, 0);
-	dphywr(DPHY_TX_TIME4_REG, 0x303);
+	dphywr(DPHY_TX_CTL, 0x10000000);
+	dphywr(DPHY_TX_TIME0, 0xa06000e);
+	dphywr(DPHY_TX_TIME1, 0xa033207);
+	dphywr(DPHY_TX_TIME2, 0x1e);
+	dphywr(DPHY_TX_TIME3, 0);
+	dphywr(DPHY_TX_TIME4, 0x303);
 
-	// Enable DPHY (undocumented)
-	dphywr(DPHY_GCTL_REG, 0x31);
-	dphywr(DPHY_ANA0_REG, 0x9f007f00);
-	dphywr(DPHY_ANA1_REG, 0x17000000);
-	dphywr(DPHY_ANA4_REG, 0x1f01555);
-	dphywr(DPHY_ANA2_REG, 0x2);
+	dphywr(DPHY_GCTL, 0x31);
+	dphywr(DPHY_ANA0, 0x9f007f00);
+	dphywr(DPHY_ANA1, 0x17000000);
+	dphywr(DPHY_ANA4, 0x1f01555);
+	dphywr(DPHY_ANA2, 0x2);
 	delay(5);
 
-	// Enable LDOR, LDOC, LDOD (undocumented)
-	dphywr(DPHY_ANA3_REG, 0x3040000);// enable ldor, ldoc, ldod
+	dphywr(DPHY_ANA3, 0x3040000);
 	delay(1);
-	dphywr(DPHY_ANA3_REG, dphyrd(DPHY_ANA3_REG) & ~(0xf8000000) | 0xf8000000); // enable vtcc, vttd
+	dphywr(DPHY_ANA3, dphyrd(DPHY_ANA3) & ~(0xf8000000) | 0xf8000000);
 	delay(1);
-	dphywr(DPHY_ANA3_REG,dphyrd(DPHY_ANA3_REG) & ~(0x4000000) |  0x4000000); // enable div
+	dphywr(DPHY_ANA3,dphyrd(DPHY_ANA3) & ~(0x4000000) |  0x4000000);
 	delay(1);
-	dphywr(DPHY_ANA2_REG, dphyrd(DPHY_ANA2_REG) | dphyrd(DPHY_ANA2_REG) | 0x10); //enable ck_cpu
+	dphywr(DPHY_ANA2, dphyrd(DPHY_ANA2) | dphyrd(DPHY_ANA2) | 0x10);
 	delay(1);
-	dphywr(DPHY_ANA1_REG, dphyrd(DPHY_ANA1_REG) | 0x80000000); // vtt mode
-	dphywr(DPHY_ANA2_REG, dphyrd(DPHY_ANA2_REG) | 0xf000000); // enable ps2 cpu
-	
+	dphywr(DPHY_ANA1, dphyrd(DPHY_ANA1) | 0x80000000);
+	dphywr(DPHY_ANA2, dphyrd(DPHY_ANA2) | 0xf000000);	
 }
+
 static void
 lcdreset(void)
 {
-	// configure PD23 for output
 	piocfg("PD23", PioOutput);
 	pioset("PD23", 1);
 	delay(15);
@@ -335,92 +304,53 @@ lcdreset(void)
 
 // XXX: document where this comes from
 static void
-setecc(uchar header[4])
+calcecc(uchar *dst)
 {
-  u32int di_wc_word;
-  uchar d[24];
-  uchar ecc[8];
-  int i;
+	u32int di_wc_word;
+	uchar d[24];
+	uchar ecc[8];
+	int i;
 
+	di_wc_word = dst[0] | (dst[1] << 8) | (dst[2] << 16);
 
-  di_wc_word = header[0] | (header[1] << 8) | (header[2] << 16);
+	for (i = 0; i < 24; i++) {
+		d[i] = di_wc_word & 1;
+		di_wc_word >>= 1;
+	}
 
-  for (i = 0; i < 24; i++)
-    {
-      d[i] = di_wc_word & 1;
-      di_wc_word >>= 1;
-    }
-  ecc[7] = 0;
-  ecc[6] = 0;
-  ecc[5] = d[10] ^ d[11] ^ d[12] ^ d[13] ^ d[14] ^ d[15] ^ d[16] ^ d[17] ^
-           d[18] ^ d[19] ^ d[21] ^ d[22] ^ d[23];
-  ecc[4] = d[4]  ^ d[5]  ^ d[6]  ^ d[7]  ^ d[8]  ^ d[9]  ^ d[16] ^ d[17] ^
-           d[18] ^ d[19] ^ d[20] ^ d[22] ^ d[23];
-  ecc[3] = d[1]  ^ d[2]  ^ d[3]  ^ d[7]  ^ d[8]  ^ d[9]  ^ d[13] ^ d[14] ^
-           d[15] ^ d[19] ^ d[20] ^ d[21] ^ d[23];
-  ecc[2] = d[0]  ^ d[2]  ^ d[3]  ^ d[5]  ^ d[6]  ^ d[9]  ^ d[11] ^ d[12] ^
-           d[15] ^ d[18] ^ d[20] ^ d[21] ^ d[22];
-  ecc[1] = d[0]  ^ d[1]  ^ d[3]  ^ d[4]  ^ d[6]  ^ d[8]  ^ d[10] ^ d[12] ^
-           d[14] ^ d[17] ^ d[20] ^ d[21] ^ d[22] ^ d[23];
-  ecc[0] = d[0]  ^ d[1]  ^ d[2]  ^ d[4]  ^ d[5]  ^ d[7]  ^ d[10] ^ d[11] ^
-           d[13] ^ d[16] ^ d[20] ^ d[21] ^ d[22] ^ d[23];
+	ecc[7] = 0;
+	ecc[6] = 0;
+	ecc[5] = d[10] ^ d[11] ^ d[12] ^ d[13] ^ d[14] ^ d[15] ^ d[16] ^ d[17] ^ d[18] ^ d[19] ^ d[21] ^ d[22] ^ d[23];
+	ecc[4] = d[4]  ^ d[5]  ^ d[6]  ^ d[7]  ^ d[8]  ^ d[9]  ^ d[16] ^ d[17] ^ d[18] ^ d[19] ^ d[20] ^ d[22] ^ d[23];
+	ecc[3] = d[1]  ^ d[2]  ^ d[3]  ^ d[7]  ^ d[8]  ^ d[9]  ^ d[13] ^ d[14] ^ d[15] ^ d[19] ^ d[20] ^ d[21] ^ d[23];
+	ecc[2] = d[0]  ^ d[2]  ^ d[3]  ^ d[5]  ^ d[6]  ^ d[9]  ^ d[11] ^ d[12] ^ d[15] ^ d[18] ^ d[20] ^ d[21] ^ d[22];
+	ecc[1] = d[0]  ^ d[1]  ^ d[3]  ^ d[4]  ^ d[6]  ^ d[8]  ^ d[10] ^ d[12] ^ d[14] ^ d[17] ^ d[20] ^ d[21] ^ d[22] ^ d[23];
+  ecc[0] = d[0]  ^ d[1]  ^ d[2]  ^ d[4]  ^ d[5]  ^ d[7]  ^ d[10] ^ d[11] ^ d[13] ^ d[16] ^ d[20] ^ d[21] ^ d[22] ^ d[23];
 
-  header[3] = ecc[0] | (ecc[1] << 1) | (ecc[2] << 2) | (ecc[3] << 3) |
-         (ecc[4] << 4) | (ecc[5] << 5) | (ecc[6] << 6) | (ecc[7] << 7);
+	dst[3] = ecc[0]
+		| (ecc[1] << 1)
+		| (ecc[2] << 2)
+		| (ecc[3] << 3)
+		| (ecc[4] << 4)
+		| (ecc[5] << 5)
+		| (ecc[6] << 6)
+		| (ecc[7] << 7);
 }
 
-static int mipidcsshortpkt(uchar *buf, int n, uchar *dst){
+static int
+mipidcsshortpkt(uchar *buf, int n, uchar *dst)
+{
 	assert(n == 1 || n == 2);
-	uchar header[4] = {
-		n == 1 ? MIPI_DSI_DCS_SHORT_WRITE : MIPI_DSI_DCS_SHORT_WRITE_PARAM,
-		buf[0],
-		n == 2 ? buf[1] : 0,
-	};
-	setecc(header);
-	dst[0] = header[0];
-	dst[1] = header[1];
-	dst[2] = header[2];
-	dst[3] = header[3];
+	dst[0] = (n == 1 ? MIPI_DSI_DCS_SHORT_WRITE : MIPI_DSI_DCS_SHORT_WRITE_PARAM);
+	dst[1] = buf[0];
+	dst[2] = (n == 2 ? buf[1] : 0);
+	calcecc(dst);
 	return 4;
 }
 
-static u16int crc16ccitt_tab[256] =
+static u16int
+crc16ccitt(uchar *buf, int n)
 {
-  0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf,
-  0x8c48, 0x9dc1, 0xaf5a, 0xbed3, 0xca6c, 0xdbe5, 0xe97e, 0xf8f7,
-  0x1081, 0x0108, 0x3393, 0x221a, 0x56a5, 0x472c, 0x75b7, 0x643e,
-  0x9cc9, 0x8d40, 0xbfdb, 0xae52, 0xdaed, 0xcb64, 0xf9ff, 0xe876,
-  0x2102, 0x308b, 0x0210, 0x1399, 0x6726, 0x76af, 0x4434, 0x55bd,
-  0xad4a, 0xbcc3, 0x8e58, 0x9fd1, 0xeb6e, 0xfae7, 0xc87c, 0xd9f5,
-  0x3183, 0x200a, 0x1291, 0x0318, 0x77a7, 0x662e, 0x54b5, 0x453c,
-  0xbdcb, 0xac42, 0x9ed9, 0x8f50, 0xfbef, 0xea66, 0xd8fd, 0xc974,
-  0x4204, 0x538d, 0x6116, 0x709f, 0x0420, 0x15a9, 0x2732, 0x36bb,
-  0xce4c, 0xdfc5, 0xed5e, 0xfcd7, 0x8868, 0x99e1, 0xab7a, 0xbaf3,
-  0x5285, 0x430c, 0x7197, 0x601e, 0x14a1, 0x0528, 0x37b3, 0x263a,
-  0xdecd, 0xcf44, 0xfddf, 0xec56, 0x98e9, 0x8960, 0xbbfb, 0xaa72,
-  0x6306, 0x728f, 0x4014, 0x519d, 0x2522, 0x34ab, 0x0630, 0x17b9,
-  0xef4e, 0xfec7, 0xcc5c, 0xddd5, 0xa96a, 0xb8e3, 0x8a78, 0x9bf1,
-  0x7387, 0x620e, 0x5095, 0x411c, 0x35a3, 0x242a, 0x16b1, 0x0738,
-  0xffcf, 0xee46, 0xdcdd, 0xcd54, 0xb9eb, 0xa862, 0x9af9, 0x8b70,
-  0x8408, 0x9581, 0xa71a, 0xb693, 0xc22c, 0xd3a5, 0xe13e, 0xf0b7,
-  0x0840, 0x19c9, 0x2b52, 0x3adb, 0x4e64, 0x5fed, 0x6d76, 0x7cff,
-  0x9489, 0x8500, 0xb79b, 0xa612, 0xd2ad, 0xc324, 0xf1bf, 0xe036,
-  0x18c1, 0x0948, 0x3bd3, 0x2a5a, 0x5ee5, 0x4f6c, 0x7df7, 0x6c7e,
-  0xa50a, 0xb483, 0x8618, 0x9791, 0xe32e, 0xf2a7, 0xc03c, 0xd1b5,
-  0x2942, 0x38cb, 0x0a50, 0x1bd9, 0x6f66, 0x7eef, 0x4c74, 0x5dfd,
-  0xb58b, 0xa402, 0x9699, 0x8710, 0xf3af, 0xe226, 0xd0bd, 0xc134,
-  0x39c3, 0x284a, 0x1ad1, 0x0b58, 0x7fe7, 0x6e6e, 0x5cf5, 0x4d7c,
-  0xc60c, 0xd785, 0xe51e, 0xf497, 0x8028, 0x91a1, 0xa33a, 0xb2b3,
-  0x4a44, 0x5bcd, 0x6956, 0x78df, 0x0c60, 0x1de9, 0x2f72, 0x3efb,
-  0xd68d, 0xc704, 0xf59f, 0xe416, 0x90a9, 0x8120, 0xb3bb, 0xa232,
-  0x5ac5, 0x4b4c, 0x79d7, 0x685e, 0x1ce1, 0x0d68, 0x3ff3, 0x2e7a,
-  0xe70e, 0xf687, 0xc41c, 0xd595, 0xa12a, 0xb0a3, 0x8238, 0x93b1,
-  0x6b46, 0x7acf, 0x4854, 0x59dd, 0x2d62, 0x3ceb, 0x0e70, 0x1ff9,
-  0xf78f, 0xe606, 0xd49d, 0xc514, 0xb1ab, 0xa022, 0x92b9, 0x8330,
-  0x7bc7, 0x6a4e, 0x58d5, 0x495c, 0x3de3, 0x2c6a, 0x1ef1, 0x0f78,
-};
-static u16int crc16ccitt(uchar *buf, int n) {
-	/* CRC polynomial x^16+x^12+x^5+1 */
 	u16int v = 0xffff;
 	int i;
 	for(i = 0; i < n;i++){
@@ -428,31 +358,46 @@ static u16int crc16ccitt(uchar *buf, int n) {
 	}
 	return v;
 }
-static int mipidcslongpkt(uchar *buf, int n, uchar *dst){
-	uchar header[4] = {
-		MIPI_DSI_DCS_LONG_WRITE,
-		n & 0xff,
-		n >> 8
-	};
+
+static int
+mipidcslongpkt(uchar *buf, int n, uchar *dst)
+{
+	dst[0] = MIPI_DSI_DCS_LONG_WRITE;
+	dst[1] = n & 0xff;
+	dst[2] = n >> 8;
 	uchar footer[2];
 
 	u16int crc = crc16ccitt(buf, n);
-	setecc(header);
+	calcecc(dst);
 	footer[0] = crc & 0xff;
 	footer[1] = crc >> 8;
 
-	dst[0] = header[0];
-	dst[1] = header[1];
-	dst[2] = header[2];
-	dst[3] = header[3];
-	for(int i = 0; i < n; i++){
+	for(int i = 0; i < n; i++)
 		dst[4+i] = buf[i];
-	}
+
 	dst[4+n] = footer[0];
 	dst[4+n+1] = footer[1];
 	return n+6;
 }
-static void mipidcs(uchar* buf, int n){
+
+static int
+dsitx(void)
+{
+	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) & ~(1));
+	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) | 1);
+
+	int timeout = 1000;
+	while(timeout-- && (dsird(DSI_BASIC_CTL0_REG) & 1))
+		delay(50);
+
+	if(timeout <= 0)
+		return -1;
+	return 0;
+}
+
+static void
+mipidcs(uchar* buf, int n)
+{
 	uchar pkt[128];
 	int i;
 	u32int v;
@@ -472,11 +417,8 @@ static void mipidcs(uchar* buf, int n){
 		break;
 	}
 
-	// DSI low power mode
-
 	dsiwr(DSI_CMD_CTRL_REG, (1<<26)|(1<<25)|(1<<9));
 
-	// Write the packet
 	for(i = 0; i < pktlen; i += 4){
 		v = pkt[i] 
 			| ((i + 1 < pktlen) ?  pkt[i+1] : 0) << 8
@@ -485,334 +427,19 @@ static void mipidcs(uchar* buf, int n){
 		assert(i <= 0xfc);
 		dsiwr(DSI_CMD_TX_REGISTER + i, v);
 	}
-	// set the packet length
+
 	dsiwr(DSI_CMD_CTRL_REG, dsird(DSI_CMD_CTRL_REG) & ~(0xff) | (pktlen-1));
 
-	// begin transmission
 #define DSI_INST_JUMP_SEL_REG 0x48
 	dsiwr(DSI_INST_JUMP_SEL_REG, 
 		4<<(4*0)
 		| 15<<(4*4)
 	);
-	// toggle dsi to start transmission
-	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) & ~(1));
-	// re-enable dsi to send packet
-	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) | 1);
 
-	// wait for transmission
-	int timeout = 1000;
-	while(timeout-- && (dsird(DSI_BASIC_CTL0_REG) & 1)){
-		delay(50);
-	}
-	if(timeout <= 0)
+	if(dsitx() == -1)
 		panic("dcs command timeout");
 
 }
-static uchar setextc[] = {
-	0xb9, /* setextc, pg 131 */
-	0xf1,
-	0x12,
-	0x83,
-};
-static uchar setmipi[] = {
-	0xba, /* setmipi, pg144 */
-	0x33,
-	0x81,
-	0x05,
-	0xf9,
-	0x0e,
-	0x0e,
-	0x20, /* undocumented */
-	0x00,
-	0x00,
-	0x00,
-	0x00,
-	0x00,
-	0x00,
-	0x00,
-	0x44,
-	0x25,
-	0x00,
-	0x91,
-	0x0a,
-	0x00,
-	0x00,
-	0x02,
-	0x4F,
-	0x11,
-	0x00,
-	0x00,
-	0x37,	
-};
-
-static uchar setpowerext[] = {
-	0xb8, /* setpower_ext, pg142 */
-	0x25,
-	0x22,
-	0x20,
-	0x03,
-	
-};
-static uchar setrgbif[] = {
-	0xb3, /* setrgbif, pg134 */
-	0x10,
-	0x10,
-	0x05,
-	0x05,
-	0x03,
-	0xff,
-	0x00,
-	0x00,
-	0x00,
-	0x00,
-};
-static uchar setscr[] = {
-	0xc0, /* setscr, pg147 */
-	0x73,
-	0x73,
-	0x50,
-	0x50,
-	0x0,
-	0xc0,
-	0x08,
-	0x70,
-	0x0,
-};
-
-static uchar setvdc[] = {
-	0xbc, /* setvdc, pg 146 */
-	0x4e,
-};
-
-static uchar setpanel[] = {
-	0xcc, /* setpanel, pg154 */
-	0xb
-};
-static uchar setcyc[] = {
-	0xb4, /* setcyc, pg135 */
-	0x80
-};
-
-static uchar setdisp[] = {
-	0xb2, /* setdisp, pg132 */
-	0xf0,
-	0x12,
-	0xf0,
-};
-
-static uchar seteq[] = {
-	0xe3, /* seteq, pg159 */
-	0x0,
-	0x0,
-	0x0b,
-	0x0b,
-	0x10,
-	0x10,
-	0x0,
-	0x0,
-	0x0,
-	0x0,
-	0xff,
-	0x00,
-	0xc0,
-	0x10,
-};
-
-static uchar undoccmd11[] = {
-	0xc6, /* undocumented */
-	0x01,
-	0x00,
-	0xff,
-	0xff,
-	0x00,
-};
-
-static uchar setpower[] = {
-	0xc1, /* setpower, pg149 */
-	0x74,
-	0x0,
-	0x32,
-	0x32,
-	0x77,
-	0xf1,
-	0xff,
-	0xff,
-	0xcc,
-	0xcc,
-	0x77,
-	0x77,
-};
-
-static uchar setbgp[] = {
-	0xb5, /* setbgp, pg136*/
-	0x07,
-	0x07,
-};
-
-static uchar setvcom[] ={
-	0xb6, /* setvcom, pg137 */
-	0x2c,
-	0x2c,
-};
-
-static uchar undoccmd15[] = {
-	0xbf,
-	0x02,
-	0x11,
-	0x00
-};
-
-static uchar setgip1[] = {
-	0xe9, /* set gip, pg163 */
-	0x82,
-	0x10,
-	0x06,
-	0x05,
-	0xa2,
-	0x0a,
-	0xa5,
-	0x12,
-	0x31,
-	0x23,
-	0x37,
-	0x83,
-	0x04,
-	0xbc,
-	0x27,
-	0x38,
-	0x0c,
-	0x0,
-	0x03,
-	0x0, 0x0, 0x0,
-	0x0c,
-	0x0,
-	0x03,
-	0x0, 0x0, 0x0,
-	0x75,
-	0x75,
-	0x31,
-	0x88, 0x88, 0x88, 0x88, 0x88, 0x88,
-	0x13,
-	0x88,
-	0x64,
-	0x64,
-	0x20,
-	0x88, 0x88, 0x88, 0x88, 0x88, 0x88,
-	0x2,
-	0x88,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-};
-
-static uchar setgip2[] = {
-0xEA, /* setgip2, pg170 */
-0x02,
-0x21,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x02,
-0x46,
-0x02,
-0x88,
-0x88,
-0x88,
-0x88,
-0x88,
-0x88,
-0x64,
-0x88,
-0x13,
-0x57,
-0x13,
-0x88,
-0x88,
-0x88,
-0x88,
-0x88,
-0x88,
-0x75,
-0x88,
-0x23,
-0x14,
-0x00,
-0x00,
-0x02,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x00,
-0x03,
-0x0A,
-0xA5,
-0x00,
-0x00,
-0x00,
-0x0,
-};
-
-static uchar setgamma[] = {
-0xE0, /* setgamma, pg158 */
-0x00,
-0x09,
-0x0D,
-0x23,
-0x27,
-0x3C,
-0x41,
-0x35,
-0x07,
-0x0D,
-0x0E,
-0x12,
-0x13,
-0x10,
-0x12,
-0x12,
-0x18,
-0x00,
-0x09,
-0x0D,
-0x23,
-0x27,
-0x3C,
-0x41,
-0x35,
-0x07,
-0x0D,
-0x0E,
-0x12,
-0x13,
-0x10,
-0x12,
-0x12,
-0x18,
-};
-
-static uchar slpout[] = {
-	0x11, /* exit sleep mode, pg 89 */
-};
-
-static uchar dispon[] = {
-	0x29, /* display on, pg 97 */
-};
 
 static void
 lcdpanelinit(void)
@@ -845,34 +472,30 @@ lcdpanelinit(void)
 static void
 pmicsetup(void)
 {
-	// configure PD23 for output, set to low. (Pin is active low)
+	/* Pin is active low */
 	piocfg("PD23", PioOutput);
 	pioset("PD23", 0);
 	delay(15);
-	setpmicvolt("DLDO1", 3300); // camera / usb hsic / i2c sensors
+	setpmicvolt("DLDO1", 3300);
 	setpmicstate("DLDO1", 1);
 	setpmicvolt("DLDO2", 1800);
 	setpmicstate("DLDO2", 1);
+
 	// XXX: GPIO0LDO for capacitive touch panel
 	pwrwr(0x91, pwrrd(0x91) & ~(0x1f) | 26); // XXX: Move this to axp803.c. Enable GPIO0LDO for capacitive touch panel.
 	pwrwr(0x90, pwrrd(0x90) & ~(0x7) | 3); // XXX: Low noise LDO on
 	pwrwr(0x90, 3); // XXX: Low noise LDO on
 
-	delay(15); // wait for power on
+	delay(15);
 }
 
 static void
 mipihscinit(void)
 {
 	dsiwr(DSI_INST_JUMP_SEL_REG, 0xf02);
-	dsiwr(DSI_BASIC_CTL0_REG, dsird(DSI_BASIC_CTL0_REG) | 1);
-	delay(1);
-	coherence();
-	DEBUG iprint("Read reg loop\n");
-	while(dsird(DSI_BASIC_CTL0_REG) & 1){
-		delay(50);
-	}
-	DEBUG iprint("End read reg loop\n");
+
+	if(dsitx() == -1)
+		panic("Could not transmit DSI packet");
 	dsiwr(DSI_INST_FUNC_REG(0), dsird(DSI_INST_FUNC_REG(0)) & ~(1<<4));
 	delay(1);
 	coherence();
@@ -882,18 +505,19 @@ mipihscinit(void)
 	delay(10);
 }
 
-void lcdinit(void)
+void
+lcdinit(void)
 {
 	DEBUG iprint("tcon0 init\n");
-	tcon0init();
+	tcon0init(720, 1440);
 	DEBUG iprint("pmic setup\n");
-	pmicsetup(); // pmic was already initialized for rsb, just need to configure.
+	pmicsetup();
 	DEBUG iprint("dsi block\n");
-	dsiinit();	// enable mipi dsi block
+	dsiinit();
 	DEBUG iprint("dphyinit\n");
-	dphyinit(); // enable mipi physical layer
+	dphyinit();
 	DEBUG iprint("lcd reset\n");
-	lcdreset(); // reset lcd panel and wait 15 ms
+	lcdreset();
 	DEBUG iprint("lcdinit\n");
 	lcdpanelinit();
 	DEBUG iprint("mipihscinit\n");

@@ -132,7 +132,34 @@ getresetstate(int i)
 	return s;
 }
 
+int
+closethegate(char *name)
+{
+	u32int buf;
+	Reset *r;
+	Gate *g;
 
+	r = findreset(name);
+	g = findgate(name);
+
+	if(g == nil || r == nil)
+		return -1;
+
+//	iprint("closethegate:%s = %s & %s\n", name, g->name, r->name);
+//	iprint("closethegate:%s = %08uX & %08uX\n", name, (BUS_CLK_GATING_REG0 + g->bank), (BUS_SOFT_RST_REG0 + r->bank));
+//	debuggates();
+
+	/* open the gate */
+	buf = ccurd(BUS_CLK_GATING_REG0 + g->bank);
+	buf &= ~g->mask;
+	ccuwr(BUS_CLK_GATING_REG0 + g->bank, buf);
+
+	buf = ccurd(BUS_SOFT_RST_REG0 + r->bank);
+	buf &= ~r->mask;
+	ccuwr(BUS_SOFT_RST_REG0 + r->bank, buf);
+
+	return 0;
+}
 int
 openthegate(char *name)
 {
@@ -145,7 +172,7 @@ openthegate(char *name)
 
 //	iprint("opengate:%s = %s & %s\n", name, g->name, r->name);
 //	iprint("opengate:%s = %08uX & %08uX\n", name, (BUS_CLK_GATING_REG0 + g->bank), (BUS_SOFT_RST_REG0 + r->bank));
-
+//	debuggates();
 	if(g == nil || r == nil)
 		return -1;
 
@@ -324,10 +351,18 @@ clkenable(int clkid)
 	case SDMMC2_CLK_REG:
 	case PLL_DE_CTRL_REG:
 	case DE_CLK_REG:
+	case TCON0_CLK_REG:
+	case PLL_VIDEO0_CTRL_REG:
+	case PLL_MIPI_CTRL_REG: 
 		reg = ccurd(clkid);
 		reg |= CLK_ENABLED;	
 		ccuwr(clkid, reg);
 		return;
+	case MIPI_DSI_CLK_REG:
+		reg = ccurd(clkid);
+		reg |= 1<<15;
+		ccuwr(clkid, reg);
+		break;
 	case USBPHY_CFG_REG:
 		/* Most registers control 1 clock, but this controls many. We enable them all. */
 		reg = ccurd(clkid);
@@ -344,7 +379,7 @@ clkenable(int clkid)
 		ccuwr(clkid, reg);
 		return;
 	default:
-		panic("Unhandled clock");
+		panic("clkenable: Unhandled clock: %x", clkid);
 	}
 }
 
@@ -356,18 +391,22 @@ clkdisable(int clkid)
 	case SDMMC0_CLK_REG:
 	case SDMMC1_CLK_REG:
 	case SDMMC2_CLK_REG:
+	case PLL_VIDEO0_CTRL_REG:
+	case PLL_MIPI_CTRL_REG: 
 		reg = ccurd(clkid);
 		reg &= ~(CLK_ENABLED);
 		ccuwr(clkid, reg);
 		return;	
 	default:
-		panic("Unhandled clock");
+		panic("clkdisable: Unhandled clock: %x", clkid);
 	}
 }
 void
 setclkrate(int clkid, ulong hz)
 {
 	u32int	reg, n, m, refspeed;
+	int i, j;
+	Nkmp *nm;
 	switch(clkid){
 	case SDMMC0_CLK_REG:
 	case SDMMC1_CLK_REG:
@@ -406,6 +445,87 @@ setclkrate(int clkid, ulong hz)
 			| ((m-1) & SDMMC_CLK_M_MASK);
 		ccuwr(clkid, reg);
 		break;
+	case PLL_VIDEO0_CTRL_REG:
+		/* clock is 24Mhz * n / m */
+		n = 0;
+		m = 0;
+		for(nm = pll_video_nkmp; nm->rate != 0; nm++){
+			if(nm->rate == hz){
+				n = nm->n;
+				m = nm->m;
+				break;
+			}
+		}
+		if(n == 0 && m == 0)
+			panic("Unhandled speed for PLL_VIDEO0");
+		/* don't touch enabled, frac_clk_out, pll_mode_sel, or pll_sdm_en */
+		reg = ccurd(clkid) & (1<<31 | 1<<24|1<<20);
+		reg |= n <<8;
+		reg |= m;
+		ccuwr(clkid, reg);
+		break;
+	case MIPI_DSI_CLK_REG:
+		reg = ccurd(clkid);
+		switch((reg & 0x3<<8)>>8){
+		case 0:
+			refspeed = getclkrate(PLL_VIDEO0_CTRL_REG);
+			break;
+		case 2:
+			refspeed = getclkrate(PLL_PERIPH0_CTRL_REG);
+			break;
+		default:
+			panic("Unknown reference clock for MIPI_DSI_CLK_REG");
+		}
+		m = refspeed / hz;
+
+		assert(m <= 16);
+
+		reg &= ~(0xf);
+		reg |= m;
+		ccuwr(MIPI_DSI_CLK_REG, reg);
+		break;
+	case PLL_MIPI_CTRL_REG: 
+		/* clk is video0 * n * k / m. Must be 500Mhz~1.4Ghz. k >=2, m/n<=3.
+			We can't use a precalculated table because it depends on PLL_VIDEO0
+		 */
+		
+		refspeed = getclkrate(PLL_VIDEO0_CTRL_REG);
+		reg = ccurd(clkid) & ~(0xf | 0x3<<4 | 0xf<<8); /* clear n, m, k */
+		reg |= 1<<22 | 1<<23; /* set LDO1/2_en while we're here. */
+
+		/* brute force it */
+		for(i = 0; i <16;i++) { /* n */
+			for(j = 0; j< 16; j++) { /* m */
+				/* check m / n <= 3 condition */
+				if((j / i) > 3)
+					continue;
+
+				if(refspeed * (i+1) * 2 / (j+1) == hz) {
+					reg |= i <<8;
+					reg |= j <<0;
+					i = 16;
+					j = 16;
+				} else if(refspeed * (i+1) * 3 / (j+1) == hz) {
+					reg |= i <<8;
+					reg |= 1<<4;
+					reg |= j << 0;
+					i = 16;
+					j = 16;
+				} else if(refspeed * (i+1) * 4 / (j+1) == hz) {
+					reg |= i <<8;
+					reg |= 2 <<4;
+					reg |= j << 0;
+					i = 16;
+					j = 16;
+				}
+			}
+		}
+
+		ccuwr(PLL_MIPI_CTRL_REG, reg);
+		while(ccurd(PLL_MIPI_CTRL_REG) & (1<<28) == 0){
+			delay(1);
+		}
+		break;
 	case DE_CLK_REG:
 		/* FIXME: Can probably do better, but these are always used together for now, so just set PLL_DE_CTRL_REG and use it as the reference with an m of 1 */
 		reg = ccurd(clkid);
@@ -433,7 +553,7 @@ setclkrate(int clkid, ulong hz)
 		}
 		break;
 	default:
-		panic("Unhandled clock");
+		panic("setclkrate: Unhandled clock: %x", clkid);
 	}
 }
 ulong
@@ -496,7 +616,12 @@ getclkrate(int clkid)
 			return 0;
 		m = (ref & 0xf) + 1;
 		return ref / m;
+	case PLL_VIDEO0_CTRL_REG:
+		n = (reg>>8)& 0x7f;
+		m = reg&0xf;
+	
+		return SYSCLOCK*(n+1) / (m+1);
 	default:
-		panic("Unhandled clock");
+		panic("getclkrate: Unhandled clock: %x", clkid);
 	}
 }
