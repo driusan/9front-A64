@@ -14,15 +14,6 @@
 
 #define DEBUG if(0)
 
-static enum {
-	STATE_STARTING,
-	STATE_WAIT_ADDR,
-		STATE_GOT_ADDRESS,
-	STATE_WR_BYTE,
-	STATE_RD_BYTE,
-	STATE_IDLE
-};
-
 typedef struct Ctlr Ctlr;
 struct Ctlr
 {
@@ -393,7 +384,8 @@ io(I2Cdev *dev, uchar *pkt, int olen, int ilen)
 		if(ctlr->ack != 1) {
 			print("%s: Could not read byte, ack: %x\n", ctlr->gatename, ctlr->ack);	
 		}
-		pkt[o++] = twird(ctlr, TWI_DATA);
+		
+		pkt[o++] = (uchar) (twird(ctlr, TWI_DATA) & 0xff);
 
 
 		DEBUG print("Read byte: %x\n", pkt[o-1]);

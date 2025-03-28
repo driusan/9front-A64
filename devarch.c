@@ -562,13 +562,19 @@ batteryread(Chan*, void *a, long n, vlong offset)
  	return n;
  }
 
+static long
+toucheventread(Chan*, void *a, long n, vlong offset)
+{
+	touchwait();
+	n = readstr(0, a, n, "touch\n");
+	return n;
+}
+
 void
 archinit(void)
 {
 	keyadcinit();
 	thermalinit();
-	iprint("rsbinit\n");
-	rsbinit();
 	/* These should go in the conf file instead of devarch,
 		but they need to be called after rsbinit.
 		Moving rsb to the conf file causes things to freeze on boot
@@ -580,7 +586,7 @@ archinit(void)
 	modeminit();
 
 	addarchfile("keyadc", 0444, keyadcread, nil);
-	addarchfile("keyadc_event", 0444, keyadceventread, nil);
+	addarchfile("keyadc_event", DMEXCL|0444, keyadceventread, nil);
 	addarchfile("pllgates", 0444, pllgatesread, nil);
 	addarchfile("pllreset", 0444, pllresetread, nil);
 	addarchfile("cpuclk", 0664, cpuclkread, cpuclkwrite);
@@ -592,5 +598,6 @@ archinit(void)
 	// addarchfile("led", 0664, ledread, ledwrite);
 	addarchfile("brightness", 0644, brightnessread, brightnesswrite);
 	addarchfile("battery", 0444, batteryread, nil);
+	addarchfile("touchevent", DMEXCL|0444, toucheventread, nil);
 }
 

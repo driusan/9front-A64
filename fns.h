@@ -230,3 +230,7 @@ extern void modeminit(void);
 extern int piocfg(char *name, int val);
 extern int pioset(char *name, int on);
 extern int pioget(char *name);
+extern void pioeintcfg(char *name, int val);
+
+/* touch */
+void touchwait(void);
