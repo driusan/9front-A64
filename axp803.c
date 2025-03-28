@@ -14,6 +14,18 @@
 
 #include "axp803.h"
 
+#define DEBUG if(0)
+
+static enum {
+	Asleep,
+	Awake,
+};
+typedef struct Ctlr Ctlr;
+static struct Ctlr{
+	QLock;
+	int state;
+	int lastbrightness;
+};
 
 #define PWR_REG_MASK	0xFF
 
@@ -22,7 +34,16 @@
 #define	PWR_REASON	0x02
 #define	PWR_ID_NUM	0x03
 
+rintcrd(u32int reg)
+{
+	return *IO(u32int, R_INTC + reg);
+}
 
+static void
+rintcwr(u32int reg, u32int val)
+{
+	*IO(u32int, R_INTC + reg) = val;
+}
 static u8int
 pwrrd(u8int reg)
 {
@@ -128,7 +149,7 @@ setpmicstate(char *name, int state)
 
 	buf = pwrrd(pr->onoffreg);
 
-	iprint("setstate: %s = %d _ %08ub_", name, state, buf);
+	DEBUG iprint("setstate: %s = %d _ %08ub_", name, state, buf);
 
 	if((buf & 1<<pr->onoffbit) == (state<<pr->onoffbit))
 		return 1;
@@ -138,7 +159,7 @@ setpmicstate(char *name, int state)
 	else
 		buf ^= 1<<pr->onoffbit;
 
-	iprint("%08ub\n", buf);
+	DEBUG iprint("%08ub\n", buf);
 
 	if(pwrwr(pr->onoffreg, buf))
 		return 1;
@@ -212,7 +233,7 @@ setpmicvolt(char *name, int val)
 		buf &= pr->voltmask;
 	}
 
-	iprint("setvolt: %ud\n", buf);
+	DEBUG iprint("setvolt: %ud\n", buf);
 
 	if(pwrwr(pr->voltreg, buf))
 		return 1;
@@ -307,4 +328,159 @@ axpgetbatteryvoltage(void)
 	val |= (u8int) pwrrd(0xe3) << 4;
 	/* FIXME: This needs to be converted to a voltage. */
 	return val;
+}
+
+extern int brightness;
+static void togglestate(Ctlr *ctlr)
+{
+	switch(ctlr->state){
+	case Asleep:
+		setpmicstate("DLDO1", 1);
+		setpmicstate("DLDO2", 1);
+		DEBUG iprint("Setting brightness to %d\n", ctlr->lastbrightness);
+		backlight(ctlr->lastbrightness);
+		ctlr->state = Awake;
+		break;
+	case Awake:
+		if(brightness > 0){
+			DEBUG iprint("Saving last brightness %d\n", ctlr->lastbrightness);
+			ctlr->lastbrightness = brightness;
+		}
+		backlight(0);
+
+
+		setpmicstate("DLDO1", 0); /* video/sensors/usb hsic*/
+		setpmicstate("DLDO2", 0); /* mipi */
+		setpmicstate("DLDO3", 0); /* avdd-csi? camera? */
+		// setpmicstate("DLDO4", 0); /* wifi */
+		ctlr->state = Asleep;
+		break;
+	default:
+		panic("Invalid state");
+	}
+}
+static void
+axp803interrupt(Ureg*, void* a)
+{
+	Ctlr *ctlr = a;
+	u8int reg;
+
+	reg = pwrrd(0x2);
+	if(reg & 1<<7)
+		DEBUG iprint("Power on key override shutdown\n");
+	if(reg & 1<<5)
+		DEBUG iprint("PMIC UVLR shutdown reason\n");
+	if(reg & 1<<2)
+		DEBUG iprint("Battery insertion startup reason\n");
+	if(reg & 1<<1)
+		DEBUG iprint("Charger insertion startup reason\n");
+	if(reg & 1<<0)
+		DEBUG iprint("Power on key startup reason\n");
+	pwrwr(0x2, reg);
+
+	reg = pwrrd(0x48);
+	if(reg & 1<<7)
+		iprint("ACIN over voltage\n");
+	if(reg & 1<<6)
+		iprint("ACIN from low to high\n");
+	if(reg & 1<<5)
+		iprint("ACIN from high to low\n");
+	if(reg & 1<<4)
+		iprint("VBUS over voltage\n");
+	if(reg & 1<<3)
+		iprint("VBUS from low to high\n");
+	if(reg & 1<<2)
+		iprint("VBUS from high to low\n");
+	pwrwr(0x48, reg);
+
+	reg = pwrrd(0x49);
+	if(reg & 1<<7)
+		DEBUG iprint("Battery append IRQ\n");
+	if(reg & 1<<6)
+		DEBUG iprint("Battery absent IRQ\n");
+	if(reg & 1<<5)
+		DEBUG iprint("Battery may be bad IRQ\n");
+	if(reg & 1<<4)
+		DEBUG iprint("Quit battery safe mode IRQ\n");
+	if(reg & 1<<3)
+		DEBUG iprint("Charger is charging IRQ\n");
+	if(reg & 1<<2)
+		DEBUG iprint("Battery charge done IRQ\n");
+	pwrwr(0x49, reg);
+
+	reg = pwrrd(0x4a);
+	if(reg & 1<<7)
+		iprint("CBTOIRQ\n");
+	if(reg & 1<<6)
+		DEBUG iprint("QCBTOIRQ\n");
+	if(reg & 1<<5)
+		DEBUG iprint("CBTUIRQ\n");
+	if(reg & 1<<4)
+		DEBUG iprint("QCBTUIRQ\n");
+	if(reg & 1<<3)
+		DEBUG iprint("WBTOIRQ\n");
+	if(reg & 1<<2)
+		DEBUG iprint("QWBTOIRQ\n");
+	if(reg & 1<<1)
+		DEBUG iprint("WBTUIRQ\n");
+	if(reg & 1<<2)
+		DEBUG iprint("QWBTUIRQ\n");
+	pwrwr(0x4a, reg);
+
+	reg = pwrrd(0x4b);
+	if(reg & 1<<7)
+		DEBUG iprint("OTIRQ\n");
+	if(reg & 1<<2)
+		DEBUG iprint("GPADC(GPIO0 ADC finished\n");
+	if(reg & 1<<1)
+		DEBUG iprint("Battery lower than warning 1\n");
+	if(reg & 1<<0)
+		DEBUG iprint("Battery lower than warning 2\n");
+	pwrwr(0x4b, reg);
+
+	reg = pwrrd(0x4c);
+	if(reg & (1<<5)) 
+		DEBUG iprint("POK negative edge");
+	if(reg & (1<<6))
+		DEBUG iprint("POK positive edge");
+	if(reg & (1<<4)){
+		DEBUG iprint("POK short time");
+		togglestate(ctlr);
+	}
+	if(reg & (1<<3)){
+		DEBUG iprint("POK long time");
+		togglestate(ctlr);
+		if(ctlr->state == Awake)
+			backlight(100);
+
+	}
+	pwrwr(0x4c, reg);
+
+	reg = pwrrd(0x4d);
+	if (reg & 1<<1)
+		DEBUG iprint("BC_USB_ChngEvnt\n");
+	if(reg & 1<<0)
+		DEBUG iprint("MV_ChngEvnt\n");
+	pwrwr(0x4d, reg);
+
+	/* ack the interupt */
+	rintcwr(0x10, 1);
+}
+
+static void
+rintrinit(void)
+{
+	rintcwr(0xc, 0); /* low */
+	rintcwr(0x40, 1); /* enable */
+}
+
+static Ctlr ctlr;
+void
+axp803link(void)
+{
+	ctlr.state = Awake;
+	ctlr.lastbrightness = brightness;
+
+	rintrinit();
+	intrenable(IRQpmic, axp803interrupt, &ctlr, BUSUNKNOWN, "axp803");
 }

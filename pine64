@@ -29,10 +29,13 @@ link
 	ethermedium
 	loopbackmedium
 	netdevmedium
+	rsb
+	axp803
 	i2csunxi	devi2c
 #	ethersunxi	ethermii
 	sdhc
 	backlight
+	touch
 	usbehci usbehcisunxi
 
 ip
@@ -45,7 +48,6 @@ ip
 	ipmux
 
 misc
-	rsb
 	pio
 	uarti8250
 	keyadc
