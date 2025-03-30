@@ -8,7 +8,7 @@
 #include "dat.h"
 #include "fns.h"
 #include "io.h"
-
+#include "ccu.h"
 enum {					/* registers */
 	Rbr		= 0,		/* Receiver Buffer (RO) */
 	Thr		= 0,		/* Transmitter Holding (WO) */
@@ -21,6 +21,7 @@ enum {					/* registers */
 	Msr		= 6,		/* Modem Status */
 	Scr		= 7,		/* Scratch Pad */
 //	Mdr		= 8,		/* Mode Def'n (missing on mt7688)*/
+	Usr		= 31,
 	Dll		= 0,		/* Divisor Latch LSB */
 	Dlm		= 1,		/* Divisor Latch MSB */
 };
@@ -126,19 +127,53 @@ typedef struct Ctlr {
 extern PhysUart i8250physuart;
 
 static Ctlr i8250ctlr[] = {
-{	.io	= (u32int*) PHYSCONS,
-	.irq	= IRQuart0,
-	.tbdf	= -1,
-	.poll	= 0, },
+	{
+		.io	= (u32int*) PHYSCONS,
+		.irq	= IRQuart0,
+		.tbdf	= -1,
+		.poll	= 0,
+	},
+	{
+		.io	= (u32int*) (VIRTIO + UART1),
+		.irq	=IRQuart1,
+		.tbdf	= -1,
+		.poll	= 0,
+	},
+	{
+		.io	= (u32int*) (VIRTIO + UART2),
+		.irq	=IRQuart2,
+		.tbdf	= -1,
+		.poll	= 0,
+	},
+	{
+		.io	= (u32int*) (VIRTIO + UART3),
+		.irq	= IRQuart3,
+		.tbdf	= -1,
+		.poll	= 0,
+	},
+	{
+		.io	= (u32int*) (VIRTIO + UART4),
+		.irq	= IRQuart4,
+		.tbdf	= -1,
+		.poll	= 0,
+	},
 };
 
 static Uart i8250uart[] = {
 {	.regs	= &i8250ctlr[0], /* not [2] */
 	.name	= "uart0",
-	.freq	= 3686000,	/* Not used, we use the global i8250freq */
+	.freq	= 3686000,
 	.phys	= &i8250physuart,
 	.console = 1,
+	.next	= &i8250uart[1], },
+	{
+	.regs	= &i8250ctlr[3], /* modem at command interface */
+	.name	= "uart3",
+	.freq	= 3686000,
+	.phys	= &i8250physuart,
+	.console = 0,
 	.next	= nil, },
+
 };
 
 #define csr8r(c, r)	((c)->io[r])
@@ -383,11 +418,9 @@ i8250bits(Uart* uart, int bits)
 static int
 i8250baud(Uart* uart, int baud)
 {
-#ifdef notdef				/* don't change the speed */
 	ulong bgc;
 	Ctlr *ctlr;
-	extern int i8250freq;	/* In the config file */
-
+	int i8250freq = getclkrate(APB2_CFG_REG);
 	/*
 	 * Set the Baud rate by calculating and setting the Baud rate
 	 * Generator Constant. This will work with fairly non-standard
@@ -404,7 +437,7 @@ i8250baud(Uart* uart, int baud)
 	csr8o(ctlr, Dlm, bgc>>8);
 	csr8o(ctlr, Dll, bgc);
 	csr8w(ctlr, Lcr, 0);
-#endif
+
 	uart->baud = baud;
 	return 0;
 }
@@ -466,6 +499,7 @@ i8250interrupt(Ureg*, void* arg)
 	Ctlr *ctlr;
 	Uart *uart;
 	int iir, lsr, old, r;
+
 
 	uart = arg;
 	ctlr = uart->regs;
@@ -672,7 +706,7 @@ uartconsinit(void)
 {
 	consuart = &i8250uart[0];
 	consuart->console = 1;
-	uartctl(consuart, "l8 pn s1");
+	uartctl(consuart, "b115200 l8 pn s1");
 }
 
 PhysUart i8250physuart = {

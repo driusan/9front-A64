@@ -43,10 +43,17 @@ pincfg(void)
 	piocfg("PH9", PioInput);
 	/* PH8 - airplane mode */
 	piocfg("PH8", PioOutput);
-	/* PH7 - sleep status */
+	/* PH7 - sleep status -- conflicts with UART3 CTS */
 	piocfg("PH7", PioOutput);
 	/* PL6 - ring indicator - input. FIXME: Change to S_PL_EINT6 for interrupt? */
 	piocfg("PL6", PioInput); 
+
+	/* uart */
+	if(openthegate("UART3") == -1)
+		panic("Could not open UART3");
+	piocfg("PD1", 3); /* UART3_RX */
+	piocfg("PD0", 3); /* UART3_TX */
+
 }
 
 static void

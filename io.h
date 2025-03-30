@@ -37,10 +37,10 @@
 #define	THERMAL		0x01C25000
 
 #define	UART0		0x1C28000
-#define	UART1		0x28400
-#define	UART2		0x28800
-#define	UART3		0x28C00
-#define	UART4		0x29000
+#define	UART1		0x1C28400
+#define	UART2		0x1C28800
+#define	UART3		0x1C28C00
+#define	UART4		0x1C29000
 
 #define	GPU			0x40000
 
