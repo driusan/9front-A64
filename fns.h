@@ -210,6 +210,8 @@ extern int axpgetbatteryvoltage(void);
 extern int axpgetmaxcharge(void);
 extern int pmic_batterycharging(void);
 extern int pmic_batterypresent(void);
+extern int axpgetwarning1(void);
+extern int axpgetwarning2(void);
 /* archA64 */
 extern void arch_rsbsetup(void);
 

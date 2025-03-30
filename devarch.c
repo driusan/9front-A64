@@ -510,16 +510,8 @@ batteryread(Chan*, void *a, long n, vlong offset)
  {
  	char *p, *name;;
 	int i, l;
-	int pct;
- 	int ratedcharge;
-	int currentcharge;
-	char* lastcharge = "unknown";
-	char *warning = "unknown";
-	char *lowcap = "unknown";
-	int volt;
-	char *designvolt = "unknown";
-	char *timeleft = "unknown";
-	char *state = "unknown";
+	char *state;
+	int maxcharge;
 	if(pmic_batterypresent() <= 0) {
 		return readstr(offset, a, n, ""); 
 	}
@@ -535,25 +527,24 @@ batteryread(Chan*, void *a, long n, vlong offset)
 		state = "unknown";
 		break;
 	}
-	volt = axpgetbatteryvoltage();
-	currentcharge = pmic_chargepct();
-	ratedcharge = axpgetmaxcharge();
  	p = smalloc(READSTR);
- 
 
  	l = 0;
  	qlock(&plock);
  
-	l += snprint(p+l, READSTR-l, "%d mA %d %s %d %s %s mV %d %s %s %s\n",	
+	maxcharge = axpgetmaxcharge();
+	l += snprint(p+l, READSTR-l, "%d mA %d %d %d %d %d mV %s\n",	
 		pmic_chargepct(),
-		currentcharge,
-		lastcharge,
-		ratedcharge,
-		warning,
-		lowcap,
-		volt,
-		designvolt,
-		timeleft,
+		/* mA separator */
+		axpgetcurrentcharge(),
+		maxcharge, /* fixme: first should be last full charge, second should be max design */
+		maxcharge, 
+		maxcharge * axpgetwarning1() / 100,
+		maxcharge * axpgetwarning2() / 100,
+		/* mV separator */
+		/* FIXME: add present voltage */
+		/* FIXME: add design voltage */
+		/* FIXME: Add approximate time of charge left as hh:mm:ss */
 		state
 	);
  	n = readstr(offset, a, n, p);

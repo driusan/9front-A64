@@ -297,14 +297,13 @@ axpgetmaxcharge(void)
 	int val;
 	u8int buf = pwrrd(0xe0);
 
-	if(!(buf & (1<<7)))
-		return -1;
+//	if(!(buf & (1<<7)))
+//		return -1;
 
 	val = (buf & 0x7f)<<8;
 	val |= pwrrd(0xe1);
 	return (int )((float )val * 1.456);
 }
-
 
 int
 axpgetcurrentcharge(void)
@@ -312,8 +311,8 @@ axpgetcurrentcharge(void)
 	int val;
 	u8int buf = pwrrd(0xe2);
 
-	if(!(buf & (1<<7)))
-		return -1;
+//	if(!(buf & (1<<7)))
+//		return -1;
 
 	val = (buf & 0x7f)<<8;
 	val |= pwrrd(0xe3);
@@ -329,7 +328,18 @@ axpgetbatteryvoltage(void)
 	/* FIXME: This needs to be converted to a voltage. */
 	return val;
 }
-
+int
+axpgetwarning1(void)
+{
+	int val = pwrrd(0xe5) & 0xf0;
+	val >>= 4;
+	return val + 5;
+}
+int
+axpgetwarning2(void)
+{
+	return pwrrd(0xe5) & 0xf;
+}
 extern int brightness;
 static void togglestate(Ctlr *ctlr)
 {
@@ -463,14 +473,14 @@ axp803interrupt(Ureg*, void* a)
 		DEBUG iprint("MV_ChngEvnt\n");
 	pwrwr(0x4d, reg);
 
-	/* ack the interupt */
+	/* ack the interupt in r_intc so it doesn't keep firing */
 	rintcwr(0x10, 1);
 }
 
 static void
 rintrinit(void)
 {
-	rintcwr(0xc, 0); /* low */
+	rintcwr(0xc, 0); /* NMI is low level interrupt */
 	rintcwr(0x40, 1); /* enable */
 }
 
