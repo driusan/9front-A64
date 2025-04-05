@@ -200,6 +200,7 @@ twiinterrupt(Ureg*, void* a){
 		ctlr->ack = 1;
 		wakeup(&ctlr->r);
 		break;
+	case STAT_IDLE:
 	case 0xf9:
 		/* ??? */
 		break;
