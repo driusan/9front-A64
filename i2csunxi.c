@@ -379,7 +379,7 @@ io(I2Cdev *dev, uchar *pkt, int olen, int ilen)
 	/* Restart with read bit set */
 	for(int i = 1; i <= ilen;i++){
 		ctlr->ack = -1;
-		twiwr(ctlr, TWI_CNTR, INT_EN | BUS_EN | INT_FLAG | (i == ilen-1 ? A_ACK : 0));
+		twiwr(ctlr, TWI_CNTR, INT_EN | BUS_EN | INT_FLAG | (i == ilen ? 0 : A_ACK));
 		tsleep(&ctlr->r, return0, nil, 1000);
 		while(ctlr->ack == -1);
 		if(ctlr->ack != 1) {
