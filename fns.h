@@ -160,7 +160,7 @@ extern void uartconsinit(void);
 extern uint getkeyadc(void);
 extern char* getkeyadc_event(void);
 extern void keyadcinit(void);
-
+extern Dirtab* addarchfile(char *name, int perm, Rdwrfn *rdfn, Rdwrfn *wrfn);
 
 /* ccu */
 extern char* listgates(int);
@@ -204,14 +204,7 @@ extern int getpmicstate(int);
 extern int getpmicvolt(int);
 extern int setpmicstate(char*, int);
 extern int setpmicvolt(char*, int);
-extern int pmic_chargepct(void);
-extern int axpgetcurrentcharge(void);
-extern int axpgetbatteryvoltage(void);
-extern int axpgetmaxcharge(void);
-extern int pmic_batterycharging(void);
-extern int pmic_batterypresent(void);
-extern int axpgetwarning1(void);
-extern int axpgetwarning2(void);
+
 /* archA64 */
 extern void arch_rsbsetup(void);
 

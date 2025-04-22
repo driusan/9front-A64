@@ -476,82 +476,7 @@ ledwrite(Chan*, void *a, long z, vlong offset)
 	return z;
 }
 */
-extern int brightness;
-static long
-brightnessread(Chan*, void *a, long n, vlong offset)
-{
-	char *p, *name;
-	int i, l, s;
 
-	p = smalloc(READSTR);
-
-	l = 0;
-	qlock(&plock);
-
-	l += snprint(p+l, READSTR-l, "%d\n", brightness);
-	n = readstr(offset, a, n, p);
-	free(p);
-	qunlock(&plock);
-	return n;
-}
-static long
-brightnesswrite(Chan*, void *a, long z, vlong offset)
-{
-	int brt = atoi(a);
-	if (brt < 0 || brt > 100){
-		error("bad brightness");
-	}
-	backlight(brt);
-	return z;
-}
-
-static long
-batteryread(Chan*, void *a, long n, vlong offset)
- {
- 	char *p, *name;;
-	int i, l;
-	char *state;
-	int maxcharge;
-	if(pmic_batterypresent() <= 0) {
-		return readstr(offset, a, n, ""); 
-	}
-	switch(pmic_batterycharging())
-	{
-	case 0:
-		state = "discharging";
-		break;
-	case 1:
-		state = "charging";
-		break;
-	default:
-		state = "unknown";
-		break;
-	}
- 	p = smalloc(READSTR);
-
- 	l = 0;
- 	qlock(&plock);
- 
-	maxcharge = axpgetmaxcharge();
-	l += snprint(p+l, READSTR-l, "%d mA %d %d %d %d %d mV %s\n",	
-		pmic_chargepct(),
-		/* mA separator */
-		axpgetcurrentcharge(),
-		maxcharge, /* fixme: first should be last full charge, second should be max design */
-		maxcharge, 
-		maxcharge * axpgetwarning1() / 100,
-		maxcharge * axpgetwarning2() / 100,
-		/* mV separator */
-		/* FIXME: add present voltage */
-		/* FIXME: add design voltage */
-		/* FIXME: Add approximate time of charge left as hh:mm:ss */
-		state
-	);
- 	n = readstr(offset, a, n, p);
- 	free(p);
- 	qunlock(&plock);
- 	return n;
- }
 
 static long
 toucheventread(Chan*, void *a, long n, vlong offset)
@@ -587,8 +512,7 @@ archinit(void)
 	addarchfile("irqact", 0444, irqactread, nil);
 	addarchfile("pmic", 0664, pmicread, pmicwrite);
 	// addarchfile("led", 0664, ledread, ledwrite);
-	addarchfile("brightness", 0644, brightnessread, brightnesswrite);
-	addarchfile("battery", 0444, batteryread, nil);
+
 	addarchfile("touchevent", DMEXCL|0444, toucheventread, nil);
 }
 

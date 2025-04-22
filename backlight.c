@@ -42,6 +42,34 @@ void backlight(int pct){
 	
 };
 
+static long
+brightnessread(Chan*, void *a, long n, vlong offset)
+{
+	char *p, *name;
+	int i, l, s;
+
+	p = smalloc(READSTR);
+
+	l = 0;
+
+	l += snprint(p+l, READSTR-l, "%d\n", brightness);
+	n = readstr(offset, a, n, p);
+	free(p);
+
+	return n;
+}
+
+static long
+brightnesswrite(Chan*, void *a, long z, vlong offset)
+{
+	int brt = atoi(a);
+	if (brt < 0 || brt > 100){
+		error("bad brightness");
+	}
+	backlight(brt);
+	return z;
+}
+
 /**
  * Configure the backlight pins for the Pinephone display
  */
@@ -78,4 +106,5 @@ backlightlink(void)
 			bright = 100;
 	}
 	backlight(bright);
+	addarchfile("brightness", 0644, brightnessread, brightnesswrite);
 }

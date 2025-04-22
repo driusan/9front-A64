@@ -229,3 +229,6 @@ struct Soc {			/* SoC dependent configuration */
 	uintptr	virtio;
 };
 extern Soc soc;
+
+/* for addarchfile, might not belong here */
+typedef long Rdwrfn(Chan*, void*, long, vlong);

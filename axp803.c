@@ -254,7 +254,7 @@ getpmicname(int rail)
 	return pr->name;
 }
 
-int
+static int
 pmic_batterypresent(void)
 {
 	u8int reg = pwrrd(PWR_MODE);
@@ -264,7 +264,7 @@ pmic_batterypresent(void)
 	return reg & (1<<5);
 }
 
-int
+static int
 pmic_batterycharging(void)
 {
 	u8int reg = pwrrd(PWR_MODE);
@@ -279,7 +279,7 @@ pmic_batterycharging(void)
 }
 
 
-int
+static int
 pmic_chargepct(void)
 {
 	u8int buf = pwrrd(0xb9);
@@ -289,9 +289,7 @@ pmic_chargepct(void)
 	return buf & 0x7f;
 }
 
-
-
-int
+static int
 axpgetmaxcharge(void)
 {
 	int val;
@@ -305,7 +303,7 @@ axpgetmaxcharge(void)
 	return (int )((float )val * 1.456);
 }
 
-int
+static int
 axpgetcurrentcharge(void)
 {
 	int val;
@@ -320,7 +318,7 @@ axpgetcurrentcharge(void)
 }
 
 
-int
+static int
 axpgetbatteryvoltage(void)
 {
 	int val = pwrrd(0xa1) & 0xf;
@@ -328,18 +326,21 @@ axpgetbatteryvoltage(void)
 	/* FIXME: This needs to be converted to a voltage. */
 	return val;
 }
-int
+
+static int
 axpgetwarning1(void)
 {
 	int val = pwrrd(0xe5) & 0xf0;
 	val >>= 4;
 	return val + 5;
 }
-int
+
+static int
 axpgetwarning2(void)
 {
 	return pwrrd(0xe5) & 0xf;
 }
+
 extern int brightness;
 static void togglestate(Ctlr *ctlr)
 {
@@ -369,6 +370,7 @@ static void togglestate(Ctlr *ctlr)
 		panic("Invalid state");
 	}
 }
+
 static void
 axp803interrupt(Ureg*, void* a)
 {
@@ -477,6 +479,54 @@ axp803interrupt(Ureg*, void* a)
 	rintcwr(0x10, 1);
 }
 
+static long
+batteryread(Chan*, void *a, long n, vlong offset)
+ {
+ 	char *p, *name;;
+	int i, l;
+
+	char *state;
+	int maxcharge;
+	if(pmic_batterypresent() <= 0) {
+		return readstr(offset, a, n, ""); 
+	}
+	switch(pmic_batterycharging())
+	{
+	case 0:
+		state = "discharging";
+		break;
+	case 1:
+		state = "charging";
+		break;
+	default:
+		state = "unknown";
+		break;
+	}
+ 	p = smalloc(READSTR);
+
+ 	l = 0;
+ 
+	maxcharge = axpgetmaxcharge();
+	l += snprint(p+l, READSTR-l, "%d mA %d %d %d %d %d mV %s\n",	
+		pmic_chargepct(),
+		/* mA separator */
+		axpgetcurrentcharge(),
+		maxcharge, /* fixme: first should be last full charge, second should be max design */
+		maxcharge, 
+		maxcharge * axpgetwarning1() / 100,
+		maxcharge * axpgetwarning2() / 100,
+		/* mV separator */
+		/* FIXME: add present voltage */
+		/* FIXME: add design voltage */
+		/* FIXME: Add approximate time of charge left as hh:mm:ss */
+		state
+	);
+ 	n = readstr(offset, a, n, p);
+ 	free(p);
+
+ 	return n;
+ }
+
 static void
 rintrinit(void)
 {
@@ -493,4 +543,6 @@ axp803link(void)
 
 	rintrinit();
 	intrenable(IRQpmic, axp803interrupt, &ctlr, BUSUNKNOWN, "axp803");
+
+	addarchfile("battery", 0444, batteryread, nil);
 }
