@@ -99,12 +99,14 @@ extern void fpoff(void);
 extern void fpclear(void);
 // extern void fpsave(FPsave*);
 // extern void fprestore(FPsave*);
-extern FPsave* fpukenter(Ureg*);
-extern void fpukexit(Ureg*, FPsave*);
+extern void fpukenter(Ureg*);
+extern void fpukexit(Ureg*);
 extern void fpuprocsave(Proc*);
 extern void fpuprocfork(Proc*);
 extern void fpuprocsetup(Proc*);
 extern void fpuprocrestore(Proc*);
+extern void fpunotify(Proc*);
+extern void fpunoted(Proc*);
 extern void mathtrap(Ureg*);
 
 /* trap */
@@ -118,7 +120,6 @@ extern void procsave(Proc*);
 extern void procrestore(Proc *);
 extern void trap(Ureg*);
 extern void syscall(Ureg*);
-extern void noted(Ureg*, ulong);
 extern void faultarm64(Ureg*);
 extern void dumpstack(void);
 extern void dumpregs(Ureg*);

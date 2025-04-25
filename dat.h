@@ -7,13 +7,14 @@
 #define	HZ		100			/* clock frequency */
 #define	MS2HZ		(1000/HZ)		/* millisec per clock tick */
 #define	TK2SEC(t)	((t)/HZ)		/* ticks to seconds */
-
+ 
 enum {
 	Mhz	= 1000 * 1000,
 };
 
 typedef struct Conf	Conf;
 typedef struct Confmem	Confmem;
+typedef struct FPalloc	FPalloc;
 typedef struct FPsave	FPsave;
 typedef struct PFPU	PFPU;
 typedef struct ISAConf	ISAConf;
@@ -68,23 +69,32 @@ struct FPsave
 	ulong	status;
 };
 
+struct FPalloc
+{
+	FPsave;
+
+	FPalloc	*link;	/* when context nests */
+};
+
+#define KFPSTATE
+
 struct PFPU
 {
 	int	fpstate;
-	int kfpstate;
-	FPsave *fpsave;
-	FPsave *kfpsave;
+	int	kfpstate;
+	FPalloc	*fpsave;
+	FPalloc	*kfpsave;
 };
 
 enum
 {
 	FPinit,
 	FPactive,
-	FPinactive,
 	FPprotected,
+	FPinactive,		/* fpsave valid when fpstate >= FPincative */
 
 	/* bits or'd with the state */
-	FPillegal= 0x100,
+	FPnotify = 0x100,
 };
 
 struct Confmem
@@ -100,7 +110,7 @@ struct Conf
 {
 	ulong	nmach;		/* processors */
 	ulong	nproc;		/* processes */
-	Confmem	mem[4];		/* physical memory */
+	Confmem	mem[3];		/* physical memory */
 	ulong	npage;		/* total physical pages of memory */
 	ulong	upages;		/* user page pool */
 	ulong	copymode;	/* 0 is copy on write, 1 is copy on reference */
@@ -109,8 +119,6 @@ struct Conf
 	ulong	nimage;		/* number of page cache image headers */
 	ulong	nswap;		/* number of swap pages */
 	int	nswppo;		/* max # of pageouts per segment pass */
-	ulong	hz;		/* processor cycle freq */
-	ulong	mhz;
 	int	monitor;	/* flag */
 };
 
@@ -150,13 +158,14 @@ struct Mach
 	MMMU;
 
 	PMach;
-	int fpstate;
-	FPsave *fpsave;
+
+	int	fpstate;
+	FPalloc	*fpsave;
 
 	int	cputype;
 	ulong	delayloop;
-	int	cpumhz;
-	uvlong	cpuhz;			/* speed of cpu */
+	int cpumhz;
+	uvlong cpuhz;
 
 	int	stack[1];
 };
@@ -172,7 +181,6 @@ struct
 extern register Mach* m;			/* R27 */
 extern register Proc* up;			/* R26 */
 extern int normalprint;
-
 /*
  *  a parsed plan9.ini line
  */
@@ -220,15 +228,6 @@ struct DevConf
 	int	nports;			/* Number of ports */
 	Devport	*ports;			/* The ports themselves */
 };
-
-struct Soc {			/* SoC dependent configuration */
-	ulong	dramsize;
-	uintptr	busdram;
-	ulong	iosize;
-	uintptr	physio;
-	uintptr	virtio;
-};
-extern Soc soc;
 
 /* for addarchfile, might not belong here */
 typedef long Rdwrfn(Chan*, void*, long, vlong);
