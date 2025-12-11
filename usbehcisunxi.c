@@ -30,7 +30,7 @@ enum {
 	PmuIRQ = 0x0, /* documented on page 618 of A64 user manual */
 	PmuUnkH3 = 0x10, /* undocumented */
 };
-static Ctlr ctlrs[2] = {
+static Ctlr ctlrs[3] = {
 	{
 		.base = PHYSDEV + USB0,
 		.irq = IRQotgehci,
@@ -39,6 +39,10 @@ static Ctlr ctlrs[2] = {
 		.base = PHYSDEV + USB1,
 		.irq = IRQusbehci,
 	},
+	{
+		.base = 0,
+		.irq = 0
+	}
 };
 
 static void
