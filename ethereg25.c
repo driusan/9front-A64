@@ -75,8 +75,8 @@ poweron(void)
 	pioset("PB3", 1);
 	delay(600);
 	pioset("PB3", 0);
-	/* Disable airplane mode */
-	pioset("PH8", 1);
+	/* Disable airplane mode. */
+	pioset("PH8", 0);
 
 	while(pioget("PH9") != 0 && timeout--)
 	{
