@@ -70,7 +70,7 @@ readtime(void)
 	rtc.min  = (treg >>  8) & BITS(6);
 	rtc.hour = (treg >> 16) & BITS(5);
 	
-	rtc.year += 2010;
+	rtc.year += 1970;
 	
 	return rtc2sec(&rtc);
 }
@@ -150,7 +150,7 @@ rtcwrite(Chan *c, void *buf, long n, vlong off)
 		if (yrsize(rtc.year) == ldmsize)
 			leap = 1;
 		
-		rtc.year -= 2010;
+		rtc.year -= 1970;
 		
 		num = (leap << 22)
 			| (((rtc.mday) & BITS(5)) << 0)
