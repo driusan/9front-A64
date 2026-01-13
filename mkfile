@@ -1,5 +1,5 @@
 CONF=pine64
-CONFLIST=pine64
+CONFLIST=pine64 pinephone
 
 loadaddr=0xFFFFFFFFC0100000
 kzero=0xffffffff80000000

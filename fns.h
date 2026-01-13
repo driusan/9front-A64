@@ -160,6 +160,7 @@ extern uint getkeyadc(void);
 extern char* getkeyadc_event(void);
 extern void keyadcinit(void);
 extern Dirtab* addarchfile(char *name, int perm, Rdwrfn *rdfn, Rdwrfn *wrfn);
+extern void subarchinit(void);
 
 /* ccu */
 extern char* listgates(int);

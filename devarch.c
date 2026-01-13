@@ -477,29 +477,14 @@ ledwrite(Chan*, void *a, long z, vlong offset)
 }
 */
 
-
-static long
-toucheventread(Chan*, void *a, long n, vlong offset)
-{
-	touchwait();
-	n = readstr(0, a, n, "touch\n");
-	return n;
-}
-
 void
 archinit(void)
 {
 	keyadcinit();
 	thermalinit();
-	/* These should go in the conf file instead of devarch,
-		but they need to be called after rsbinit.
-		Moving rsb to the conf file causes things to freeze on boot
-		(presumably because of some other timing/order dependency
-	*/
 
-	lcdinit();
-	deinit();
-	modeminit();
+	/* Pine64/Pinephone specific arch stuff */
+	subarchinit();
 
 	addarchfile("keyadc", 0444, keyadcread, nil);
 	addarchfile("keyadc_event", DMEXCL|0444, keyadceventread, nil);
@@ -512,7 +497,5 @@ archinit(void)
 	addarchfile("irqact", 0444, irqactread, nil);
 	addarchfile("pmic", 0664, pmicread, pmicwrite);
 	// addarchfile("led", 0664, ledread, ledwrite);
-
-	addarchfile("touchevent", DMEXCL|0444, toucheventread, nil);
 }
 
