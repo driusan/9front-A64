@@ -32,10 +32,10 @@ link
 	rsb
 	axp803
 	i2csunxi	devi2c
-#	ethersunxi	ethermii
-	sdhc
-	backlight
-	touch
+	ethersunxi	ethermii
+#	sdhc
+#	backlight
+#	touch
 	usbehci usbehcisunxi
 
 ip
@@ -54,10 +54,11 @@ misc
 	ccu
 	thermal
 	axp803
-	sdmmc sdhc
+#	sdmmc sdhc
 	lcd
 	display
-	ethereg25
+#	ethereg25
+	ltsarch
 
 port
 	int cpuserver = 0;
