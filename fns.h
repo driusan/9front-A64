@@ -209,10 +209,13 @@ extern int setpmicvolt(char*, int);
 extern void arch_rsbsetup(void);
 
 /* display */
-extern void deinit(void);
+extern void deinit(int width, int height);
 
 /* lcd */
 extern void lcdinit(void);
+
+/* hdmi */
+extern void hdmiinit(int width, int height);
 
 /* backlight */
 extern void backlightinit(void);
@@ -228,4 +231,7 @@ extern int pioget(char *name);
 extern void pioeintcfg(char *name, int val);
 
 /* touch */
-void touchwait(void);
+extern void touchwait(void);
+
+/* board specific arch for display engine */
+extern int displayishdmi(void);

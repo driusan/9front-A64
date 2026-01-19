@@ -26,9 +26,6 @@
 #define OVL_UI(i, reg) (MIXER(0, 0x2000 + 0x1000*i) + reg)
 #define UI_SCALER(i, n) MIXER(0, 0x40000 + (0x10000*i) + n)
 
-#define WIDTH 720
-#define HEIGHT 1440
-
 static void
 phywr(int offset, u32int val)
 {
@@ -103,7 +100,7 @@ dengineinit(void)
 {
 	DEBUG("sram to DMA\n");
 	/* set sram to dma. FIXME: Check if this is necessary */
-	phywr(0x4, 0); 
+	phywr(0x4, 0);
 	clkenable(PLL_DE_CTRL_REG);
 
 	/* Sets PLL_DE_CTRL_REG clock as side-effect */
@@ -117,7 +114,8 @@ dengineinit(void)
 	dewr(SCLK_GATE, derd(SCLK_GATE) | 1);
 	dewr(AHB_RESET, derd(AHB_RESET) | 1);
 	dewr(HCLK_GATE, derd(HCLK_GATE) | 1);
-	dewr(DE2TCON_MUX, derd(DE2TCON_MUX) & ~(1));
+
+	dewr(DE2TCON_MUX, displayishdmi());
 
 	for(int i = 0; i < 0x6000; i+= 4){
 		dewr(MIXER(0, i), 0);
@@ -145,9 +143,8 @@ dengineinit(void)
 #define ALPHA_MIX (0x2<<1)
 
 static void
-overlayinit(void) {
-
-	u32int *fb = screeninit(WIDTH, HEIGHT, 32);
+overlayinit(int width, int height) {
+	u32int *fb = screeninit(width, height, 32);
 	dewr(BLD(BLD_BK_COLOUR), 0xff000000);
 	dewr(BLD(BLD_PREMUL_CTL), 0);
 	/* disable ui overlay, channel 1-3 */
@@ -161,9 +158,9 @@ overlayinit(void) {
 	/* set overlay for channel 1. opaque, xrgb, alphamode 2, enable */
 	dewr(OVL_UI(1, OVL_UI_ATTR_CTRL), 0xff << ALPHA_SHIFT | XRGB | ALPHA_MIX | LAYER_EN);
 	dewr(OVL_UI(1, OVL_UI_TOP_LADD), PADDR(fb));
-	dewr(OVL_UI(1, OVL_UI_PITCH), WIDTH*4);
-	dewr(OVL_UI(1, OVL_UI_MBSIZE), ((HEIGHT-1) << 16) | (WIDTH-1));
-	dewr(OVL_UI(1, OVL_UI_SIZE), ((HEIGHT-1) << 16) | (WIDTH-1));
+	dewr(OVL_UI(1, OVL_UI_PITCH), width*4);
+	dewr(OVL_UI(1, OVL_UI_MBSIZE), ((height-1) << 16) | (width-1));
+	dewr(OVL_UI(1, OVL_UI_SIZE), ((height-1) << 16) | (width-1));
 	dewr(OVL_UI(1, OVL_UI_COORD), 0);
 
 
@@ -175,12 +172,12 @@ overlayinit(void) {
 #define BLEND1MA 0x3 /* 1-A */
 
 static void
-blenderinit(void)
+blenderinit(int width, int height)
 {
-	dewr(BLD(BLD_SIZE), ((HEIGHT-1) << 16) | (WIDTH-1));
-	dewr(MIXER(0, GLB_SIZE), ((HEIGHT-1) << 16) | (WIDTH-1));
+	dewr(BLD(BLD_SIZE), ((height-1) << 16) | (width-1));
+	dewr(MIXER(0, GLB_SIZE), ((height-1) << 16) | (width-1));
 
-	dewr(BLD(BLD_CH_ISIZE), ((HEIGHT-1) << 16) | (WIDTH-1));
+	dewr(BLD(BLD_CH_ISIZE), ((height-1) << 16) | (width-1));
 	dewr(BLD(BLD_FILL_COLOUR), 0xff000000);
 	dewr(BLD(BLD_CH_OFFSET), 0);
 	dewr(BLD(BLD_BK_COLOUR), 0xff000000);
@@ -199,12 +196,12 @@ enablemixer(void)
 }
 
 void
-deinit(void)
+deinit(int width, int height)
 {
 	dengineinit();
 	delay(160);
-	overlayinit();
-	blenderinit();
+	overlayinit(width, height);
+	blenderinit(width, height);
 	enablemixer();
 }
 
@@ -214,8 +211,3 @@ blankscreen(int)
 {
 }
 
-void
-displaylink(void)
-{
-	deinit();
-}

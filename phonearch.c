@@ -12,16 +12,17 @@ toucheventread(Chan*, void *a, long n, vlong)
 	return n;
 }
 
+int
+displayishdmi(void)
+{
+	return 0;
+}
+
 void
 subarchinit(void)
 {
-	/* These should go in the conf file instead of devarch,
-		but they need to be called after rsbinit.
-		Moving rsb to the conf file causes things to freeze on boot
-		(presumably because of some other timing/order dependency
-	*/
 	lcdinit();
-	deinit();
+	deinit(720, 1440);
 	modeminit();
 
 	addarchfile("touchevent", DMEXCL|0444, toucheventread, nil);

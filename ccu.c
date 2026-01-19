@@ -352,10 +352,19 @@ clkenable(int clkid)
 	case PLL_DE_CTRL_REG:
 	case DE_CLK_REG:
 	case TCON0_CLK_REG:
+	case TCON1_CLK_REG:
 	case PLL_VIDEO0_CTRL_REG:
+	case PLL_VIDEO1_CTRL_REG:
 	case PLL_MIPI_CTRL_REG: 
+	case HDMI_SLOW_CLK_REG:
 		reg = ccurd(clkid);
 		reg |= CLK_ENABLED;	
+		ccuwr(clkid, reg);
+		return;
+	case HDMI_CLK_REG:
+		reg = ccurd(clkid);
+		reg |= CLK_ENABLED;
+		reg &= ~(3<<24); /* VIDEO0 src */
 		ccuwr(clkid, reg);
 		return;
 	case MIPI_DSI_CLK_REG:
@@ -446,6 +455,7 @@ setclkrate(int clkid, ulong hz)
 		ccuwr(clkid, reg);
 		break;
 	case PLL_VIDEO0_CTRL_REG:
+	case PLL_VIDEO1_CTRL_REG:
 		/* clock is 24Mhz * n / m */
 		n = 0;
 		m = 0;
@@ -619,7 +629,6 @@ getclkrate(int clkid)
 	case PLL_VIDEO0_CTRL_REG:
 		n = (reg>>8)& 0x7f;
 		m = reg&0xf;
-	
 		return SYSCLOCK*(n+1) / (m+1);
 	default:
 		panic("getclkrate: Unhandled clock: %x", clkid);
